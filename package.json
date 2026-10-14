@@ -1,0 +1,25 @@
+{
+  "name": "moxite-refinery",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite build --watch --mode development",
+    "build": "tsc --noEmit && vite build && npm run zip",
+    "zip": "rm -f \"Moxite Refinery.zip\" && cd dist && zip -qrX \"../Moxite Refinery.zip\" . -x \".DS_Store\"",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@stdlib/stats-base-dists-hypergeometric-pmf": "^0.3.1",
+    "jotai": "^3.0.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^4.7.0",
+    "typescript": "^5.9.3",
+    "vite": "^6.4.3"
+  }
+}

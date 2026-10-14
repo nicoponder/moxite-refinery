@@ -1,0 +1,27 @@
+{
+  "manifest_version": 3,
+  "name": "Moxite Refinery",
+  "version": "0.1.0",
+  "description": "Adds extra UI to Moxfield deck pages.",
+  "permissions": ["storage"],
+  "host_permissions": ["https://api2.moxfield.com/*", "https://api.scryfall.com/*", "https://data.scryfall.io/*"],
+  "content_scripts": [
+    {
+      "matches": ["https://moxfield.com/decks/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "moxite-refinery@nicoponder",
+      "strict_min_version": "140.0",
+      "data_collection_permissions": {
+        "required": ["none"]
+      }
+    },
+    "gecko_android": {
+      "strict_min_version": "142.0"
+    }
+  }
+}
