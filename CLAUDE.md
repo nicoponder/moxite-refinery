@@ -11,7 +11,10 @@ npm run dev        # rebuild dist/ on change (unminified, inline sourcemaps)
 npm run build      # tsc typecheck + production build into dist/, then npm run zip
 npm run zip        # dist/'s contents (not the folder) → "Moxite Refinery.zip" at the repo root
 npm run typecheck  # tsc only
+npm run sign       # build, then sign on addons.mozilla.org as unlisted (scripts/sign.sh)
 ```
+
+`npm run sign` reads `JWT_ISSUER` and `JWT_SECRET` (AMO API credentials) from `.env`, which is gitignored, and passes them to `web-ext` as `WEB_EXT_API_KEY`/`WEB_EXT_API_SECRET` so they stay out of the process list. Because `content.js` is minified, it also uploads the source as `git archive` of `HEAD`, so it refuses to run with uncommitted changes. The signed `.xpi` goes to `web-ext-artifacts/` (gitignored). AMO won't sign the same `version` twice, so bump it in `public/manifest.json` before each signing. It uploads to Mozilla, so don't run it unasked.
 
 There is no test suite or linter; `npm run build` is the check. To try a change, load `dist/` as an unpacked extension (Chrome: `chrome://extensions` → Load unpacked; Firefox: `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → `dist/manifest.json`), then reload the extension and the Moxfield tab after each rebuild.
 

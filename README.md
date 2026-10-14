@@ -18,6 +18,28 @@ Load `dist/` as an unpacked extension:
 
 Reload the extension (and the Moxfield tab) after each rebuild.
 
+## Build from source (for add-on reviewers)
+
+With Node.js 20 or later (built with 26) on macOS or Linux:
+
+```sh
+npm install
+npm run build   # writes the extension to dist/
+```
+
+## Sign for Firefox
+
+Put addons.mozilla.org API credentials (Tools → Manage API Keys) in `.env`:
+
+```sh
+JWT_ISSUER=user:12345:678
+JWT_SECRET=...
+```
+
+Then bump `version` in `public/manifest.json`, commit, and run `npm run sign`. It
+builds, uploads `dist/` with this repository's source for an unlisted signature,
+and saves the signed `.xpi` in `web-ext-artifacts/`.
+
 ## Adding a component
 
 1. Create it in `src/components/`. It receives `{ deckId }` as props.
