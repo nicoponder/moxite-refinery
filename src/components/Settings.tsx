@@ -1,5 +1,5 @@
 import { useAtomValue } from "jotai";
-import { useEffect, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
+import { useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
 import { bracketWinTurn } from "../content/deck";
 import {
   DEFAULT_HEAT_BANDS,
@@ -118,7 +118,11 @@ function NumberSettingInput({
 }: NumberSettingInputProps) {
   const [draft, setDraft] = useState(String(value));
   // Follows changes saved elsewhere (another tab).
-  useEffect(() => setDraft(String(value)), [value]);
+  const [savedValue, setSavedValue] = useState(value);
+  if (value !== savedValue) {
+    setSavedValue(value);
+    setDraft(String(value));
+  }
 
   return (
     <input

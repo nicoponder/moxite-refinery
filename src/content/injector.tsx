@@ -97,7 +97,7 @@ export function startInjector(injections: Injection[]): void {
     if (!deckId) {
       // Navigated away from a deck page within the SPA.
       for (const entries of mounted.values()) {
-        for (const anchor of [...entries.keys()]) unmount(entries, anchor);
+        for (const anchor of entries.keys()) unmount(entries, anchor);
       }
       currentDeckId = null;
       return;
@@ -110,7 +110,7 @@ export function startInjector(injections: Injection[]): void {
       const anchors = new Set(found === null ? [] : Array.isArray(found) ? found : [found]);
       const entries = mounted.get(injection.id)!;
 
-      for (const [anchor, entry] of [...entries]) {
+      for (const [anchor, entry] of entries) {
         if (!anchors.has(anchor) || !entry.host.isConnected) unmount(entries, anchor);
       }
 
