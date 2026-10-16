@@ -9,6 +9,8 @@ A Manifest V3 web extension that renders React components on Moxfield deck pages
 npm install
 npm run dev     # rebuilds dist/ on change
 npm run build   # typecheck + production build
+npm run check   # typecheck + oxlint + oxfmt --check
+npm run format  # format with oxfmt
 ```
 
 Load `dist/` as an unpacked extension:
