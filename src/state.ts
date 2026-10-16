@@ -1,6 +1,11 @@
 import { atom, createStore, type PrimitiveAtom } from "jotai";
 import { fetchDeck, type Deck } from "./content/deck";
-import { fetchTaggableIds, fetchTags, type ScryfallTag, type TaggableIds } from "./content/scryfall";
+import {
+  fetchTaggableIds,
+  fetchTags,
+  type ScryfallTag,
+  type TaggableIds,
+} from "./content/scryfall";
 import { onStorageChange, readStorage, writeStorage } from "./content/storage";
 
 // App-wide state. Each injected component is its own React root, so they all
@@ -76,7 +81,13 @@ function isHeatBands(value: unknown): value is number[] {
   return (
     Array.isArray(value) &&
     value.length === DEFAULT_HEAT_BANDS.length &&
-    value.every((boundary, i) => typeof boundary === "number" && boundary >= 0 && boundary <= 100 && (i === 0 || boundary >= value[i - 1]))
+    value.every(
+      (boundary, i) =>
+        typeof boundary === "number" &&
+        boundary >= 0 &&
+        boundary <= 100 &&
+        (i === 0 || boundary >= value[i - 1]),
+    )
   );
 }
 
@@ -84,7 +95,8 @@ function parseSettings(stored: unknown): Settings {
   const settings = { ...DEFAULT_SETTINGS, ...(typeof stored === "object" ? stored : {}) };
   // Arrays would otherwise be trusted as stored, wrong length and all.
   if (!isHeatBands(settings.exactHeatBands)) settings.exactHeatBands = [...DEFAULT_HEAT_BANDS];
-  if (!isHeatBands(settings.cumulativeHeatBands)) settings.cumulativeHeatBands = [...DEFAULT_HEAT_BANDS];
+  if (!isHeatBands(settings.cumulativeHeatBands))
+    settings.cumulativeHeatBands = [...DEFAULT_HEAT_BANDS];
   return settings;
 }
 
@@ -126,7 +138,11 @@ export const artTagsAtom = atom<Loadable<Map<string, ScryfallTag[]>>>({ status: 
  * Runs `load` into `target`, discarding the result if the user has moved to
  * another deck by the time it settles.
  */
-async function loadInto<T>(target: PrimitiveAtom<Loadable<T>>, deckId: string, load: () => Promise<T>): Promise<T | undefined> {
+async function loadInto<T>(
+  target: PrimitiveAtom<Loadable<T>>,
+  deckId: string,
+  load: () => Promise<T>,
+): Promise<T | undefined> {
   store.set(target, { status: "loading" });
   try {
     const value = await load();
@@ -171,7 +187,9 @@ export function setDeckId(deckId: string | null): void {
       store.set(artTagsAtom, { status: "error", error });
       return;
     }
-    const scryfallIds = Object.values(deck.boards).flatMap((board) => Object.values(board?.cards ?? {}).map((entry) => entry.card.scryfall_id));
+    const scryfallIds = Object.values(deck.boards).flatMap((board) =>
+      Object.values(board?.cards ?? {}).map((entry) => entry.card.scryfall_id),
+    );
     // One id lookup feeds both tag kinds, which then load in parallel.
     const ids = fetchTaggableIds(scryfallIds);
     taggableIds = { deckId, ids };

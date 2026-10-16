@@ -4,7 +4,11 @@
   "version": "0.1.0",
   "description": "Adds extra UI to Moxfield deck pages.",
   "permissions": ["storage"],
-  "host_permissions": ["https://api2.moxfield.com/*", "https://api.scryfall.com/*", "https://data.scryfall.io/*"],
+  "host_permissions": [
+    "https://api2.moxfield.com/*",
+    "https://api.scryfall.com/*",
+    "https://data.scryfall.io/*"
+  ],
   "content_scripts": [
     {
       "matches": ["https://moxfield.com/decks/*"],

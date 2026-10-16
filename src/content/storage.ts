@@ -15,7 +15,9 @@ declare const chrome: {
   storage: {
     local: StorageArea;
     onChanged: {
-      addListener(callback: (changes: Record<string, StorageChange>, areaName: string) => void): void;
+      addListener(
+        callback: (changes: Record<string, StorageChange>, areaName: string) => void,
+      ): void;
     };
   };
 };

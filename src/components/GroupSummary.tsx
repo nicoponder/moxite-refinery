@@ -12,7 +12,15 @@ const HAND_SIZE = 7;
 
 const styles = {
   row: { display: "flex", alignItems: "center", gap: "0.4rem" },
-  info: { flexShrink: 0, padding: 0, border: 0, background: "none", color: "inherit", cursor: "pointer", lineHeight: 0 },
+  info: {
+    flexShrink: 0,
+    padding: 0,
+    border: 0,
+    background: "none",
+    color: "inherit",
+    cursor: "pointer",
+    lineHeight: 0,
+  },
   // Only as wide as its options, rather than stretching across the modal.
   tableMode: { alignSelf: "flex-start" },
 } satisfies Record<string, CSSProperties>;
@@ -42,7 +50,12 @@ function chanceToSee(deckSize: number, groupSize: number, turn: number): number 
 }
 
 /** The first turn up to `lastTurn` by which `chanceToSee` exceeds `threshold` (0–1), or null if none does. */
-function turnToSee(deckSize: number, groupSize: number, threshold: number, lastTurn: number): number | null {
+function turnToSee(
+  deckSize: number,
+  groupSize: number,
+  threshold: number,
+  lastTurn: number,
+): number | null {
   for (let turn = 0; turn <= lastTurn; turn++) {
     if (chanceToSee(deckSize, groupSize, turn) > threshold) return turn;
   }
@@ -52,7 +65,17 @@ function turnToSee(deckSize: number, groupSize: number, threshold: number, lastT
 /** An "i" in a circle (Lucide's "info"), like Moxfield's own outline icons. */
 function InfoIcon() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <circle cx="12" cy="12" r="10" />
       <path d="M12 16v-4" />
       <path d="M12 8h.01" />
@@ -83,7 +106,8 @@ export function GroupSummary({ target: group }: InjectionProps) {
   const deckSize = deckState.value.boards.mainboard?.count ?? 0;
   const expected = expectedInHand(deckSize, groupSize);
   if (Number.isNaN(expected)) return null;
-  const lastTurn = turnCutoffMode === "bracket" ? bracketWinTurn(deckState.value).turn : fixedTurnCutoff;
+  const lastTurn =
+    turnCutoffMode === "bracket" ? bracketWinTurn(deckState.value).turn : fixedTurnCutoff;
   const turn = turnToSee(deckSize, groupSize, drawChanceThreshold / 100, lastTurn);
   const percent = `${drawChanceThreshold}%`;
   // Rounded down, so a chance just short of the threshold never displays as reaching it.
@@ -95,11 +119,17 @@ export function GroupSummary({ target: group }: InjectionProps) {
         {expected.toFixed(2)} expected in opening {HAND_SIZE}
       </div>
       {turn !== null ? (
-        <div title={`First turn with over a ${percent} chance of having seen at least one of these cards, drawing one card a turn from turn 1`}>
-          {turn === 0 ? `>${percent} to see one in opening ${HAND_SIZE}` : `>${percent} to see one by turn ${turn}`}
+        <div
+          title={`First turn with over a ${percent} chance of having seen at least one of these cards, drawing one card a turn from turn 1`}
+        >
+          {turn === 0
+            ? `>${percent} to see one in opening ${HAND_SIZE}`
+            : `>${percent} to see one by turn ${turn}`}
         </div>
       ) : (
-        <div title={`Chance of having seen at least one of these cards by turn ${lastTurn}, drawing one card a turn from turn 1; it doesn't pass ${percent} by then`}>
+        <div
+          title={`Chance of having seen at least one of these cards by turn ${lastTurn}, drawing one card a turn from turn 1; it doesn't pass ${percent} by then`}
+        >
           {lastTurnPercent} chance of seeing one by turn {lastTurn}
         </div>
       )}
@@ -109,12 +139,24 @@ export function GroupSummary({ target: group }: InjectionProps) {
   return (
     <div style={styles.row}>
       {odds}
-      <button type="button" title="Draw odds details" aria-label={`Draw odds for ${group}`} style={styles.info} onClick={() => dialog.current?.showModal()}>
+      <button
+        type="button"
+        title="Draw odds details"
+        aria-label={`Draw odds for ${group}`}
+        style={styles.info}
+        onClick={() => dialog.current?.showModal()}
+      >
         <InfoIcon />
       </button>
       <Dialog ref={dialog} title={group} wide>
         {odds}
-        <Segmented options={TABLE_MODES} value={tableMode} label="Table" onChange={setTableMode} style={styles.tableMode} />
+        <Segmented
+          options={TABLE_MODES}
+          value={tableMode}
+          label="Table"
+          onChange={setTableMode}
+          style={styles.tableMode}
+        />
         <DrawTable deckSize={deckSize} groupSize={groupSize} mode={tableMode} />
       </Dialog>
     </div>

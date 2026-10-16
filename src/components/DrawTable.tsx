@@ -11,14 +11,41 @@ const HEADER_BACKGROUND = "var(--bs-modal-bg, #fff)";
 
 const styles = {
   scroller: { overflow: "auto", maxHeight: "calc(85vh - 14rem)" },
-  table: { borderCollapse: "separate", borderSpacing: 1, fontSize: "0.75rem", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" },
-  columnHeader: { position: "sticky", top: 0, zIndex: 1, padding: "0.15rem 0.4rem", textAlign: "right", background: HEADER_BACKGROUND },
-  rowHeader: { position: "sticky", left: 0, zIndex: 1, padding: "0.15rem 0.4rem", textAlign: "right", background: HEADER_BACKGROUND },
+  table: {
+    borderCollapse: "separate",
+    borderSpacing: 1,
+    fontSize: "0.75rem",
+    fontVariantNumeric: "tabular-nums",
+    whiteSpace: "nowrap",
+  },
+  columnHeader: {
+    position: "sticky",
+    top: 0,
+    zIndex: 1,
+    padding: "0.15rem 0.4rem",
+    textAlign: "right",
+    background: HEADER_BACKGROUND,
+  },
+  rowHeader: {
+    position: "sticky",
+    left: 0,
+    zIndex: 1,
+    padding: "0.15rem 0.4rem",
+    textAlign: "right",
+    background: HEADER_BACKGROUND,
+  },
   corner: { position: "sticky", top: 0, left: 0, zIndex: 2, background: HEADER_BACKGROUND },
   axisLabel: { padding: "0.15rem 0.4rem", textAlign: "left", fontWeight: 400, opacity: 0.7 },
   cell: { padding: "0.15rem 0.4rem", textAlign: "right", fontWeight: 600 },
   // The expected-count row, which stays in view below the scrolling rows.
-  footerCell: { position: "sticky", bottom: 0, zIndex: 1, padding: "0.3rem 0.4rem 0.15rem", textAlign: "right", background: HEADER_BACKGROUND },
+  footerCell: {
+    position: "sticky",
+    bottom: 0,
+    zIndex: 1,
+    padding: "0.3rem 0.4rem 0.15rem",
+    textAlign: "right",
+    background: HEADER_BACKGROUND,
+  },
   footerHeader: { left: 0, zIndex: 2, fontWeight: 400, lineHeight: 1.2, opacity: 0.7 },
 } satisfies Record<string, CSSProperties>;
 
@@ -57,10 +84,19 @@ interface DrawTableProps {
  * number of copies.
  */
 export function DrawTable({ deckSize, groupSize, mode }: DrawTableProps) {
-  const { drawTableFromOpeningHand, drawTableMaxCardsSeen, drawTableMaxCopies, exactHeatBands, cumulativeHeatBands } = useAtomValue(settingsAtom);
+  const {
+    drawTableFromOpeningHand,
+    drawTableMaxCardsSeen,
+    drawTableMaxCopies,
+    exactHeatBands,
+    cumulativeHeatBands,
+  } = useAtomValue(settingsAtom);
   const firstCardsSeen = drawTableFromOpeningHand ? HAND_SIZE : 1;
   const lastCardsSeen = Math.min(drawTableMaxCardsSeen, deckSize);
-  const cardsSeen = Array.from({ length: Math.max(lastCardsSeen - firstCardsSeen + 1, 0) }, (_, i) => firstCardsSeen + i);
+  const cardsSeen = Array.from(
+    { length: Math.max(lastCardsSeen - firstCardsSeen + 1, 0) },
+    (_, i) => firstCardsSeen + i,
+  );
   // Every possible number of copies, to calculate with; only those up to the maximum are shown.
   const copies = Array.from({ length: groupSize + 1 }, (_, k) => k);
   const shownCopies = copies.slice(0, Math.min(drawTableMaxCopies, groupSize) + 1);
@@ -92,7 +128,11 @@ export function DrawTable({ deckSize, groupSize, mode }: DrawTableProps) {
       if (k > n) return <td key={n} />;
       const p = cumulative[i][k];
       return (
-        <td key={n} title={`At least ${k} of ${groupSize} in the first ${n} cards seen`} style={{ ...styles.cell, ...(p < NEGLIGIBLE ? {} : heat(p, cumulativeHeatBands)) }}>
+        <td
+          key={n}
+          title={`At least ${k} of ${groupSize} in the first ${n} cards seen`}
+          style={{ ...styles.cell, ...(p < NEGLIGIBLE ? {} : heat(p, cumulativeHeatBands)) }}
+        >
           {formatChance(p)}
         </td>
       );
@@ -101,7 +141,14 @@ export function DrawTable({ deckSize, groupSize, mode }: DrawTableProps) {
     // Impossible outcomes, e.g. more copies than cards seen, are left blank.
     if (p === 0) return <td key={n} />;
     return (
-      <td key={n} title={`Exactly ${k} of ${groupSize} in the first ${n} cards seen`} style={{ ...styles.cell, ...(p < NEGLIGIBLE ? {} : heat(p / columnMaxes[i], exactHeatBands)) }}>
+      <td
+        key={n}
+        title={`Exactly ${k} of ${groupSize} in the first ${n} cards seen`}
+        style={{
+          ...styles.cell,
+          ...(p < NEGLIGIBLE ? {} : heat(p / columnMaxes[i], exactHeatBands)),
+        }}
+      >
         {formatChance(p)}
       </td>
     );
@@ -139,7 +186,11 @@ export function DrawTable({ deckSize, groupSize, mode }: DrawTableProps) {
               by this draw
             </th>
             {cardsSeen.map((n, i) => (
-              <td key={n} title={`Expected number of these ${groupSize} cards in the first ${n} cards seen`} style={styles.footerCell}>
+              <td
+                key={n}
+                title={`Expected number of these ${groupSize} cards in the first ${n} cards seen`}
+                style={styles.footerCell}
+              >
                 {expected[i].toFixed(2)}
               </td>
             ))}

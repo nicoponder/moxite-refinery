@@ -97,8 +97,13 @@ const DEFAULT_WIN_TURN = 4;
  * opted out, not yet estimated, or not a Commander deck.
  */
 export function bracketWinTurn(deck: Deck): { bracket: number | null; turn: number } {
-  const turn = deck.format === "commander" && !deck.ignoreBrackets && deck.bracket !== undefined ? BRACKET_WIN_TURNS[deck.bracket] : undefined;
-  return turn === undefined ? { bracket: null, turn: DEFAULT_WIN_TURN } : { bracket: deck.bracket!, turn };
+  const turn =
+    deck.format === "commander" && !deck.ignoreBrackets && deck.bracket !== undefined
+      ? BRACKET_WIN_TURNS[deck.bracket]
+      : undefined;
+  return turn === undefined
+    ? { bracket: null, turn: DEFAULT_WIN_TURN }
+    : { bracket: deck.bracket!, turn };
 }
 
 const deckRequests = new Map<string, Promise<Deck>>();

@@ -14,9 +14,31 @@ const KINDS = {
 
 const styles = {
   section: { display: "flex", flexDirection: "column", gap: "0.75rem" },
-  heading: { margin: "0 0 0.4rem", fontSize: "0.8rem", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.04em", opacity: 0.75 },
-  list: { display: "flex", flexWrap: "wrap", gap: "0.3rem", margin: 0, padding: 0, listStyle: "none" },
-  pill: { display: "inline-block", padding: "0.15rem 0.55rem", borderRadius: "999px", fontSize: "0.8rem", lineHeight: 1.5, color: "inherit", textDecoration: "none" },
+  heading: {
+    margin: "0 0 0.4rem",
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    textTransform: "uppercase",
+    letterSpacing: "0.04em",
+    opacity: 0.75,
+  },
+  list: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.3rem",
+    margin: 0,
+    padding: 0,
+    listStyle: "none",
+  },
+  pill: {
+    display: "inline-block",
+    padding: "0.15rem 0.55rem",
+    borderRadius: "999px",
+    fontSize: "0.8rem",
+    lineHeight: 1.5,
+    color: "inherit",
+    textDecoration: "none",
+  },
   note: { margin: 0, fontSize: "0.85rem", opacity: 0.7 },
   // Matches Bootstrap's `hr.my-4`, which Moxfield uses between modal sections.
   divider: { margin: "1.5rem 0", border: 0, borderTop: "1px solid currentColor", opacity: 0.25 },
@@ -24,7 +46,8 @@ const styles = {
 
 /** Follows a plain left click within the app; modified clicks (new tab etc.) keep the browser's behaviour. */
 function followInApp(event: MouseEvent<HTMLAnchorElement>) {
-  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
+    return;
   event.preventDefault();
   navigateInApp(event.currentTarget.getAttribute("href")!);
 }
@@ -33,7 +56,11 @@ function followInApp(event: MouseEvent<HTMLAnchorElement>) {
 function searchLink(query: string, deckId: string | null): AnchorHTMLAttributes<HTMLAnchorElement> {
   return deckId
     ? { href: deckSearchPath(deckId, query), onClick: followInApp }
-    : { href: `https://scryfall.com/search?q=${encodeURIComponent(query)}`, target: "_blank", rel: "noreferrer" };
+    : {
+        href: `https://scryfall.com/search?q=${encodeURIComponent(query)}`,
+        target: "_blank",
+        rel: "noreferrer",
+      };
 }
 
 interface TagGroupProps {
@@ -56,7 +83,11 @@ function TagGroup({ kind, state, scryfallId, searchDeckId }: TagGroupProps) {
           <li key={tag.slug}>
             <a
               {...searchLink(`${searchPrefix}:${tag.slug}`, searchDeckId)}
-              title={tag.inherited ? `Inherited: the card has a more specific tag under "${tag.label}"` : undefined}
+              title={
+                tag.inherited
+                  ? `Inherited: the card has a more specific tag under "${tag.label}"`
+                  : undefined
+              }
               style={{ ...styles.pill, background, opacity: tag.inherited ? 0.6 : 1 }}
             >
               {tag.label}
@@ -92,7 +123,11 @@ export function CardTags({ deckId, target: moxfieldCardId }: InjectionProps) {
   // Multi-face cards are identified by a face's id rather than the card's.
   const entry = Object.values(deckState.value.boards)
     .flatMap((board) => Object.values(board?.cards ?? {}))
-    .find((e) => e.card.id === moxfieldCardId || e.card.card_faces?.some((face) => face.id === moxfieldCardId));
+    .find(
+      (e) =>
+        e.card.id === moxfieldCardId ||
+        e.card.card_faces?.some((face) => face.id === moxfieldCardId),
+    );
   if (!entry) return null;
   // The add-card search only exists on decks the user can edit; elsewhere, fall back to Scryfall.
   const searchDeckId = tagSearch === "moxfield" && canSearchDeck() ? deckId : null;
@@ -100,8 +135,20 @@ export function CardTags({ deckId, target: moxfieldCardId }: InjectionProps) {
   return (
     <>
       <section style={styles.section}>
-        <TagGroup kind="oracle" state={oracleTags} scryfallId={entry.card.scryfall_id} searchDeckId={searchDeckId} />
-        {showArtTags && <TagGroup kind="art" state={artTags} scryfallId={entry.card.scryfall_id} searchDeckId={searchDeckId} />}
+        <TagGroup
+          kind="oracle"
+          state={oracleTags}
+          scryfallId={entry.card.scryfall_id}
+          searchDeckId={searchDeckId}
+        />
+        {showArtTags && (
+          <TagGroup
+            kind="art"
+            state={artTags}
+            scryfallId={entry.card.scryfall_id}
+            searchDeckId={searchDeckId}
+          />
+        )}
       </section>
       <hr style={styles.divider} />
     </>

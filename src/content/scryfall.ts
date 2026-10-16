@@ -60,7 +60,9 @@ async function scryfallJson<T>(path: string, init?: RequestInit): Promise<T> {
 function faceIds(card: ScryfallCard, field: keyof ScryfallFace): string[] {
   const top = card[field];
   if (top) return [top];
-  return [...new Set((card.card_faces ?? []).flatMap((face) => (face[field] ? [face[field]] : [])))];
+  return [
+    ...new Set((card.card_faces ?? []).flatMap((face) => (face[field] ? [face[field]] : []))),
+  ];
 }
 
 /**
@@ -78,7 +80,10 @@ export async function fetchTaggableIds(scryfallIds: string[]): Promise<Map<strin
       body: JSON.stringify({ identifiers }),
     });
     for (const card of data) {
-      result.set(card.id, { oracleIds: faceIds(card, "oracle_id"), illustrationIds: faceIds(card, "illustration_id") });
+      result.set(card.id, {
+        oracleIds: faceIds(card, "oracle_id"),
+        illustrationIds: faceIds(card, "illustration_id"),
+      });
     }
   }
   return result;
@@ -110,12 +115,17 @@ async function* gzipLines(body: ReadableStream<BufferSource>): AsyncGenerator<st
  * with a year-long cache lifetime, so the browser downloads each about once per
  * daily update.
  */
-export async function fetchTags(kind: TagKind, cards: Map<string, TaggableIds>): Promise<Map<string, ScryfallTag[]>> {
+export async function fetchTags(
+  kind: TagKind,
+  cards: Map<string, TaggableIds>,
+): Promise<Map<string, ScryfallTag[]>> {
   const { bulkType, key } = TAG_SOURCES[kind];
   const taggingKey = kind === "oracle" ? "oracle_id" : "illustration_id";
   const wanted = new Set([...cards.values()].flatMap((ids) => ids[key]));
 
-  const { jsonl_download_uri } = await scryfallJson<{ jsonl_download_uri: string }>(`/bulk-data/${bulkType}`);
+  const { jsonl_download_uri } = await scryfallJson<{ jsonl_download_uri: string }>(
+    `/bulk-data/${bulkType}`,
+  );
   const res = await fetch(jsonl_download_uri);
   if (!res.ok || !res.body) throw new Error(`Scryfall ${bulkType}: HTTP ${res.status}`);
 
@@ -151,7 +161,10 @@ export async function fetchTags(kind: TagKind, cards: Map<string, TaggableIds>):
       const tag = tags.get(tagId);
       return tag ? [{ slug: tag.slug, label: tag.label, inherited: isInherited }] : [];
     };
-    return [...[...own].flatMap((tagId) => toTag(tagId, false)), ...[...inherited].flatMap((tagId) => toTag(tagId, true))];
+    return [
+      ...[...own].flatMap((tagId) => toTag(tagId, false)),
+      ...[...inherited].flatMap((tagId) => toTag(tagId, true)),
+    ];
   }
 
   const result = new Map<string, ScryfallTag[]>();

@@ -15,12 +15,19 @@ export const injections: Injection[] = [
     // column, just above the format legality grid (the column's `.row`).
     // Prev/Next replaces the whole modal, which remounts this.
     id: "card-tags",
-    anchor: () => document.querySelector(".modal.show h1")?.closest(".col-sm-6")?.querySelector(":scope > .row") ?? null,
+    anchor: () =>
+      document
+        .querySelector(".modal.show h1")
+        ?.closest(".col-sm-6")
+        ?.querySelector(":scope > .row") ?? null,
     position: "beforebegin",
     // The card image's URL holds Moxfield's card id, .../cards/card-<card.id>-normal.webp,
     // or for multi-face cards a face id, .../cards/card-face-<card_faces[].id>-normal.webp.
     target: (anchor) =>
-      /\/card-(?:face-)?([A-Za-z0-9]+)-normal\./.exec(anchor.closest(".modal")?.querySelector("img.deckview-image.front")?.getAttribute("src") ?? "")?.[1] ?? null,
+      /\/card-(?:face-)?([A-Za-z0-9]+)-normal\./.exec(
+        anchor.closest(".modal")?.querySelector("img.deckview-image.front")?.getAttribute("src") ??
+          "",
+      )?.[1] ?? null,
     component: CardTags,
   },
   {
@@ -36,7 +43,9 @@ export const injections: Injection[] = [
     // command zone, so they're never drawn.
     id: "group-summary",
     anchor: () => {
-      const mainboard = [...document.querySelectorAll("section.deckview > div > *")].find((list) => list.querySelector(GROUP_HEADER));
+      const mainboard = [...document.querySelectorAll("section.deckview > div > *")].find((list) =>
+        list.querySelector(GROUP_HEADER),
+      );
       if (!mainboard) return null;
       return [...mainboard.querySelectorAll(GROUP_HEADER)]
         .filter((header) => !/^Commanders?\s*\(\d+\)/.test(header.textContent?.trim() ?? ""))
@@ -46,7 +55,9 @@ export const injections: Injection[] = [
     // The group's name and total quantity, as "Lands (35)". The header's text
     // runs them together ("Lands(35)") in some views.
     target: (anchor) => {
-      const match = /^(.*?)\s*\((\d+)\)/.exec(anchor.querySelector(GROUP_HEADER)?.textContent?.trim() ?? "");
+      const match = /^(.*?)\s*\((\d+)\)/.exec(
+        anchor.querySelector(GROUP_HEADER)?.textContent?.trim() ?? "",
+      );
       return match ? `${match[1]} (${match[2]})` : null;
     },
     // Matches the "% of all symbols" captions under the color analysis.

@@ -1,21 +1,55 @@
 import { useAtomValue } from "jotai";
 import { useEffect, useRef, useState, type CSSProperties, type InputHTMLAttributes } from "react";
 import { bracketWinTurn } from "../content/deck";
-import { DEFAULT_HEAT_BANDS, deckAtom, settingsAtom, updateSettings, type Settings as SettingsValues } from "../state";
+import {
+  DEFAULT_HEAT_BANDS,
+  deckAtom,
+  settingsAtom,
+  updateSettings,
+  type Settings as SettingsValues,
+} from "../state";
 import { BandSlider } from "./BandSlider";
 import { Dialog } from "./Dialog";
 import { Segmented } from "./Segmented";
 
 const styles = {
-  button: { marginLeft: "1.5rem", padding: 0, border: 0, background: "none", color: "inherit", cursor: "pointer", verticalAlign: "middle", lineHeight: 0 },
+  button: {
+    marginLeft: "1.5rem",
+    padding: 0,
+    border: 0,
+    background: "none",
+    color: "inherit",
+    cursor: "pointer",
+    verticalAlign: "middle",
+    lineHeight: 0,
+  },
   label: { display: "block", marginBottom: "0.4rem", fontWeight: 600 },
   hint: { margin: "0.35rem 0 0", fontSize: "0.85rem", opacity: 0.7 },
   checkbox: { display: "flex", alignItems: "center", gap: "0.5rem", cursor: "pointer" },
-  checkboxInput: { width: "1rem", height: "1rem", margin: 0, accentColor: "var(--bs-primary, #731fa1)", cursor: "pointer" },
+  checkboxInput: {
+    width: "1rem",
+    height: "1rem",
+    margin: 0,
+    accentColor: "var(--bs-primary, #731fa1)",
+    cursor: "pointer",
+  },
   numberField: { display: "flex", alignItems: "center", gap: "0.4rem" },
   options: { display: "flex", flexDirection: "column", gap: "0.4rem" },
-  sliderHeader: { display: "flex", alignItems: "baseline", justifyContent: "space-between", fontSize: "0.9rem" },
-  reset: { padding: 0, border: 0, background: "none", color: "var(--bs-link-color, #731fa1)", font: "inherit", fontSize: "0.8rem", cursor: "pointer" },
+  sliderHeader: {
+    display: "flex",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    fontSize: "0.9rem",
+  },
+  reset: {
+    padding: 0,
+    border: 0,
+    background: "none",
+    color: "var(--bs-link-color, #731fa1)",
+    font: "inherit",
+    fontSize: "0.8rem",
+    cursor: "pointer",
+  },
   sliders: { display: "flex", flexDirection: "column", gap: "0.9rem" },
   numberInput: {
     width: "4.5rem",
@@ -31,7 +65,17 @@ const styles = {
 /** A gear outline in the style of Moxfield's own icons (Lucide's "settings"). */
 function GearIcon() {
   return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
       <circle cx="12" cy="12" r="3" />
     </svg>
@@ -48,7 +92,10 @@ const TAG_SEARCH_OPTIONS: { value: SettingsValues["tagSearch"]; label: string }[
   { value: "moxfield", label: "Add-card search" },
 ];
 
-interface NumberSettingInputProps extends Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange"> {
+interface NumberSettingInputProps extends Omit<
+  InputHTMLAttributes<HTMLInputElement>,
+  "value" | "onChange"
+> {
   value: number;
   min: number;
   max: number;
@@ -61,7 +108,14 @@ interface NumberSettingInputProps extends Omit<InputHTMLAttributes<HTMLInputElem
  * empty field, a stray digit) can be typed; only valid ones are passed on, and
  * leaving the field restores the saved value.
  */
-function NumberSettingInput({ value, min, max, onChange, onBlur, ...props }: NumberSettingInputProps) {
+function NumberSettingInput({
+  value,
+  min,
+  max,
+  onChange,
+  onBlur,
+  ...props
+}: NumberSettingInputProps) {
   const [draft, setDraft] = useState(String(value));
   // Follows changes saved elsewhere (another tab).
   useEffect(() => setDraft(String(value)), [value]);
@@ -78,7 +132,8 @@ function NumberSettingInput({ value, min, max, onChange, onBlur, ...props }: Num
       onChange={(event) => {
         setDraft(event.target.value);
         const parsed = Number(event.target.value);
-        if (event.target.value !== "" && Number.isInteger(parsed) && parsed >= min && parsed <= max) onChange(parsed);
+        if (event.target.value !== "" && Number.isInteger(parsed) && parsed >= min && parsed <= max)
+          onChange(parsed);
       }}
       onBlur={(event) => {
         setDraft(String(value));
@@ -93,7 +148,13 @@ function BracketCutoffHint() {
   const deckState = useAtomValue(deckAtom);
   if (deckState.status !== "loaded") return null;
   const { bracket, turn } = bracketWinTurn(deckState.value);
-  return <> This deck: {bracket === null ? `no bracket, so turn ${turn}` : `bracket ${bracket}, so turn ${turn}`}.</>;
+  return (
+    <>
+      {" "}
+      This deck:{" "}
+      {bracket === null ? `no bracket, so turn ${turn}` : `bracket ${bracket}, so turn ${turn}`}.
+    </>
+  );
 }
 
 /** A gear button in the deck page's bottom bar that opens the extension's settings. */
@@ -114,7 +175,13 @@ export function Settings() {
 
   return (
     <>
-      <button type="button" title="Moxite Refinery settings" aria-label="Moxite Refinery settings" style={styles.button} onClick={() => dialog.current?.showModal()}>
+      <button
+        type="button"
+        title="Moxite Refinery settings"
+        aria-label="Moxite Refinery settings"
+        style={styles.button}
+        onClick={() => dialog.current?.showModal()}
+      >
         <GearIcon />
       </button>
       <Dialog ref={dialog} title="Moxite Refinery settings">
@@ -122,7 +189,12 @@ export function Settings() {
           <span id="moxite-tag-search-label" style={styles.label}>
             Clicking a Scryfall tag opens
           </span>
-          <Segmented options={TAG_SEARCH_OPTIONS} value={tagSearch} labelledBy="moxite-tag-search-label" onChange={(value) => updateSettings({ tagSearch: value })} />
+          <Segmented
+            options={TAG_SEARCH_OPTIONS}
+            value={tagSearch}
+            labelledBy="moxite-tag-search-label"
+            onChange={(value) => updateSettings({ tagSearch: value })}
+          />
           <p style={styles.hint}>
             {tagSearch === "scryfall"
               ? "Opens the tag's search on scryfall.com in a new tab."
@@ -132,10 +204,18 @@ export function Settings() {
 
         <div>
           <label style={styles.checkbox}>
-            <input type="checkbox" checked={showArtTags} style={styles.checkboxInput} onChange={(event) => updateSettings({ showArtTags: event.target.checked })} />
+            <input
+              type="checkbox"
+              checked={showArtTags}
+              style={styles.checkboxInput}
+              onChange={(event) => updateSettings({ showArtTags: event.target.checked })}
+            />
             Show art tags
           </label>
-          <p style={styles.hint}>Art tags describe what a card's illustration shows. They're only downloaded while this is on (about 13 MB, refreshed daily).</p>
+          <p style={styles.hint}>
+            Art tags describe what a card's illustration shows. They're only downloaded while this
+            is on (about 13 MB, refreshed daily).
+          </p>
         </div>
 
         <div>
@@ -153,7 +233,8 @@ export function Settings() {
             %
           </div>
           <p style={styles.hint}>
-            Each card group in the deck list shows the first turn with over this chance of having drawn at least one of its cards. Between 1 and 99%.
+            Each card group in the deck list shows the first turn with over this chance of having
+            drawn at least one of its cards. Between 1 and 99%.
           </p>
         </div>
 
@@ -195,12 +276,14 @@ export function Settings() {
             </div>
           </div>
           <p style={styles.hint}>
-            Groups that don't pass the threshold by this turn show their chance of being drawn by it instead.
+            Groups that don't pass the threshold by this turn show their chance of being drawn by it
+            instead.
             {turnCutoffMode === "bracket" && (
               <>
                 {" "}
-                The deck's bracket gives the first turn someone can be expected to win: turn 9 in bracket 1, 8 in bracket 2, 6 in bracket 3, and 4 in brackets 4
-                and 5 or without a bracket.
+                The deck's bracket gives the first turn someone can be expected to win: turn 9 in
+                bracket 1, 8 in bracket 2, 6 in bracket 3, and 4 in brackets 4 and 5 or without a
+                bracket.
                 <BracketCutoffHint />
               </>
             )}
@@ -215,7 +298,9 @@ export function Settings() {
                 type="checkbox"
                 checked={drawTableFromOpeningHand}
                 style={styles.checkboxInput}
-                onChange={(event) => updateSettings({ drawTableFromOpeningHand: event.target.checked })}
+                onChange={(event) =>
+                  updateSettings({ drawTableFromOpeningHand: event.target.checked })
+                }
               />
               Start at the opening hand (7 cards seen)
             </label>
@@ -230,11 +315,17 @@ export function Settings() {
             </label>
             <label style={styles.numberField}>
               Copies up to
-              <NumberSettingInput value={drawTableMaxCopies} min={1} max={99} onChange={(value) => updateSettings({ drawTableMaxCopies: value })} />
+              <NumberSettingInput
+                value={drawTableMaxCopies}
+                min={1}
+                max={99}
+                onChange={(value) => updateSettings({ drawTableMaxCopies: value })}
+              />
             </label>
           </div>
           <p style={styles.hint}>
-            The tables in a card group's info modal. Cards seen (7 to 99) stop at the mainboard's size, and copies (1 to 99) at the group's size.
+            The tables in a card group's info modal. Cards seen (7 to 99) stop at the mainboard's
+            size, and copies (1 to 99) at the group's size.
           </p>
         </div>
 
@@ -256,14 +347,19 @@ export function Settings() {
                       Reset
                     </button>
                   </div>
-                  <BandSlider label={label} value={value} onChange={(bands) => updateSettings({ [key]: bands })} />
+                  <BandSlider
+                    label={label}
+                    value={value}
+                    onChange={(bands) => updateSettings({ [key]: bands })}
+                  />
                 </div>
               );
             })}
           </div>
           <p style={styles.hint}>
-            Where each colour starts. In exact tables, a cell's share of its column's most likely outcome; in cumulative tables, which run much higher, the chance itself.
-            Drag a handle or use the arrow keys (Shift for steps of 5).
+            Where each colour starts. In exact tables, a cell's share of its column's most likely
+            outcome; in cumulative tables, which run much higher, the chance itself. Drag a handle
+            or use the arrow keys (Shift for steps of 5).
           </p>
         </div>
       </Dialog>

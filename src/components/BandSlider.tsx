@@ -6,8 +6,19 @@ const BIG_STEP = 5;
 
 const styles = {
   // Room above and below the track for the thumbs, which stand taller than it.
-  slider: { position: "relative", padding: "0.3rem 0", touchAction: "none", cursor: "pointer", userSelect: "none" },
-  track: { position: "relative", height: "1.25rem", borderRadius: "var(--bs-border-radius, 0.375rem)", overflow: "hidden" },
+  slider: {
+    position: "relative",
+    padding: "0.3rem 0",
+    touchAction: "none",
+    cursor: "pointer",
+    userSelect: "none",
+  },
+  track: {
+    position: "relative",
+    height: "1.25rem",
+    borderRadius: "var(--bs-border-radius, 0.375rem)",
+    overflow: "hidden",
+  },
   segment: { position: "absolute", top: 0, bottom: 0 },
   thumb: {
     position: "absolute",
@@ -21,13 +32,28 @@ const styles = {
     background: "#fff",
     cursor: "grab",
   },
-  legend: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "0.25rem 0.75rem", margin: "0.4rem 0 0", padding: 0, listStyle: "none" },
-  legendItem: { display: "flex", alignItems: "center", gap: "0.35rem", fontSize: "0.75rem", fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" },
+  legend: {
+    display: "grid",
+    gridTemplateColumns: "repeat(4, 1fr)",
+    gap: "0.25rem 0.75rem",
+    margin: "0.4rem 0 0",
+    padding: 0,
+    listStyle: "none",
+  },
+  legendItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.35rem",
+    fontSize: "0.75rem",
+    fontVariantNumeric: "tabular-nums",
+    whiteSpace: "nowrap",
+  },
   swatch: { flexShrink: 0, width: "0.7rem", height: "0.7rem", borderRadius: "0.15rem" },
 } satisfies Record<string, CSSProperties>;
 
 // Thumbs show focus with a ring, which inline styles can't express.
-const stylesheet = "[data-band-thumb]:focus-visible { outline: 2px solid var(--bs-primary, #731fa1); outline-offset: 2px; }";
+const stylesheet =
+  "[data-band-thumb]:focus-visible { outline: 2px solid var(--bs-primary, #731fa1); outline-offset: 2px; }";
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max);
@@ -91,7 +117,12 @@ export function BandSlider({ value, onChange, label }: BandSliderProps) {
     event.currentTarget.setPointerCapture(event.pointerId);
     thumbRefs.current[thumbs[0]]?.focus();
     // A single nearest thumb jumps to the pointer; tied ones wait to see which way the drag goes.
-    setDrag({ pointerId: event.pointerId, thumbs, startX: event.clientX, boundaries: thumbs.length === 1 ? moved(boundaries, thumbs[0], target) : boundaries });
+    setDrag({
+      pointerId: event.pointerId,
+      thumbs,
+      startX: event.clientX,
+      boundaries: thumbs.length === 1 ? moved(boundaries, thumbs[0], target) : boundaries,
+    });
   }
 
   function onPointerMove(event: PointerEvent<HTMLDivElement>) {
@@ -103,7 +134,11 @@ export function BandSlider({ value, onChange, label }: BandSliderProps) {
       thumbs = [event.clientX < drag.startX ? thumbs[0] : thumbs[thumbs.length - 1]];
       thumbRefs.current[thumbs[0]]?.focus();
     }
-    setDrag({ ...drag, thumbs, boundaries: moved(drag.boundaries, thumbs[0], percentAt(event.clientX)) });
+    setDrag({
+      ...drag,
+      thumbs,
+      boundaries: moved(drag.boundaries, thumbs[0], percentAt(event.clientX)),
+    });
   }
 
   function onPointerUp(event: PointerEvent<HTMLDivElement>) {
@@ -140,7 +175,15 @@ export function BandSlider({ value, onChange, label }: BandSliderProps) {
       >
         <div ref={trackRef} style={styles.track}>
           {HEAT_BANDS.map((band, b) => (
-            <div key={band.name} style={{ ...styles.segment, left: `${edges[b]}%`, width: `${edges[b + 1] - edges[b]}%`, background: band.color }} />
+            <div
+              key={band.name}
+              style={{
+                ...styles.segment,
+                left: `${edges[b]}%`,
+                width: `${edges[b + 1] - edges[b]}%`,
+                background: band.color,
+              }}
+            />
           ))}
         </div>
         {boundaries.map((boundary, i) => (
@@ -165,7 +208,11 @@ export function BandSlider({ value, onChange, label }: BandSliderProps) {
       </div>
       <ul style={styles.legend} aria-label={`${label} colour ranges`}>
         {HEAT_BANDS.map((band, b) => (
-          <li key={band.name} style={{ ...styles.legendItem, opacity: edges[b + 1] > edges[b] ? 1 : 0.4 }} title={band.name}>
+          <li
+            key={band.name}
+            style={{ ...styles.legendItem, opacity: edges[b + 1] > edges[b] ? 1 : 0.4 }}
+            title={band.name}
+          >
             <span style={{ ...styles.swatch, background: band.color }} />
             {edges[b + 1] > edges[b] ? `${edges[b]}–${edges[b + 1]}%` : "unused"}
           </li>

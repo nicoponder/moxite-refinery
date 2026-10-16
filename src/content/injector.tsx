@@ -59,7 +59,9 @@ interface Mounted {
  */
 export function startInjector(injections: Injection[]): void {
   // Per injection id, the mounted copies keyed by their anchor.
-  const mounted = new Map<string, Map<Element, Mounted>>(injections.map((injection) => [injection.id, new Map()]));
+  const mounted = new Map<string, Map<Element, Mounted>>(
+    injections.map((injection) => [injection.id, new Map()]),
+  );
   let currentDeckId: string | null = null;
 
   function unmount(entries: Map<Element, Mounted>, anchor: Element) {

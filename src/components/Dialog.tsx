@@ -25,10 +25,24 @@ const styles = {
     whiteSpace: "normal",
   },
   wide: { width: "max-content", maxWidth: "calc(100vw - 2rem)" },
-  body: { display: "flex", flexDirection: "column", gap: "1.25rem", padding: "1.25rem 1.5rem 1.5rem" },
+  body: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "1.25rem",
+    padding: "1.25rem 1.5rem 1.5rem",
+  },
   header: { display: "flex", alignItems: "center", justifyContent: "space-between" },
   title: { margin: 0, fontSize: "1.25rem", fontWeight: 600 },
-  close: { padding: "0 0.25rem", border: 0, background: "none", color: "inherit", fontSize: "1.5rem", lineHeight: 1, cursor: "pointer", opacity: 0.7 },
+  close: {
+    padding: "0 0.25rem",
+    border: 0,
+    background: "none",
+    color: "inherit",
+    fontSize: "1.5rem",
+    lineHeight: 1,
+    cursor: "pointer",
+    opacity: 0.7,
+  },
 } satisfies Record<string, CSSProperties>;
 
 // The dialog's backdrop can only be styled from a stylesheet.
@@ -64,7 +78,12 @@ export function Dialog({ ref, title, wide, children }: DialogProps) {
             <h2 id={titleId} style={styles.title}>
               {title}
             </h2>
-            <button type="button" aria-label="Close" style={styles.close} onClick={() => ref.current?.close()}>
+            <button
+              type="button"
+              aria-label="Close"
+              style={styles.close}
+              onClick={() => ref.current?.close()}
+            >
               ×
             </button>
           </div>
