@@ -48,16 +48,15 @@ export interface Settings {
   drawTableMaxCopies: number;
   /**
    * Where each of the draw tables' colour bands after the first starts, in
-   * percent (0–100, in order; 7 for the 8 bands in `components/heat.ts`). For
+   * percent (0–100, in order; 8 for the 9 bands in `components/heat.ts`). For
    * exact tables, as a share of each column's most likely outcome; for
    * cumulative tables, of the chance itself.
    */
-  exactHeatBands: number[];
-  cumulativeHeatBands: number[];
+  heatBands: number[];
 }
 
-/** Even eighths. */
-export const DEFAULT_HEAT_BANDS: readonly number[] = [12.5, 25, 37.5, 50, 62.5, 75, 87.5];
+/** Narrow bands near either end, where a chance's last few percent matter most. */
+export const DEFAULT_HEAT_BANDS: readonly number[] = [5, 10, 20, 40, 60, 80, 90, 95];
 
 const DEFAULT_SETTINGS: Settings = {
   tagSearch: "scryfall",
@@ -68,8 +67,7 @@ const DEFAULT_SETTINGS: Settings = {
   drawTableFromOpeningHand: true,
   drawTableMaxCardsSeen: 30,
   drawTableMaxCopies: 15,
-  exactHeatBands: [...DEFAULT_HEAT_BANDS],
-  cumulativeHeatBands: [...DEFAULT_HEAT_BANDS],
+  heatBands: [...DEFAULT_HEAT_BANDS],
 };
 const SETTINGS_KEY = "settings";
 
@@ -92,11 +90,13 @@ function isHeatBands(value: unknown): value is number[] {
 }
 
 function parseSettings(stored: unknown): Settings {
-  const settings = { ...DEFAULT_SETTINGS, ...(typeof stored === "object" ? stored : {}) };
+  // Settings no longer in use (e.g. the old per-mode `exactHeatBands`) are dropped.
+  const known = Object.entries(typeof stored === "object" && stored !== null ? stored : {}).filter(
+    ([key]) => key in DEFAULT_SETTINGS,
+  );
+  const settings: Settings = { ...DEFAULT_SETTINGS, ...Object.fromEntries(known) };
   // Arrays would otherwise be trusted as stored, wrong length and all.
-  if (!isHeatBands(settings.exactHeatBands)) settings.exactHeatBands = [...DEFAULT_HEAT_BANDS];
-  if (!isHeatBands(settings.cumulativeHeatBands))
-    settings.cumulativeHeatBands = [...DEFAULT_HEAT_BANDS];
+  if (!isHeatBands(settings.heatBands)) settings.heatBands = [...DEFAULT_HEAT_BANDS];
   return settings;
 }
 

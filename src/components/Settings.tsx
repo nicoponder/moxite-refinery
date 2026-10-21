@@ -35,12 +35,7 @@ const styles = {
   },
   numberField: { display: "flex", alignItems: "center", gap: "0.4rem" },
   options: { display: "flex", flexDirection: "column", gap: "0.4rem" },
-  sliderHeader: {
-    display: "flex",
-    alignItems: "baseline",
-    justifyContent: "space-between",
-    fontSize: "0.9rem",
-  },
+  sliderHeader: { display: "flex", alignItems: "baseline", justifyContent: "space-between" },
   reset: {
     padding: 0,
     border: 0,
@@ -50,7 +45,6 @@ const styles = {
     fontSize: "0.8rem",
     cursor: "pointer",
   },
-  sliders: { display: "flex", flexDirection: "column", gap: "0.9rem" },
   numberInput: {
     width: "4.5rem",
     padding: "0.3rem 0.5rem",
@@ -81,11 +75,6 @@ function GearIcon() {
     </svg>
   );
 }
-
-const HEAT_BAND_SLIDERS = [
-  { key: "exactHeatBands", label: "Exact tables" },
-  { key: "cumulativeHeatBands", label: "Cumulative tables" },
-] as const;
 
 const TAG_SEARCH_OPTIONS: { value: SettingsValues["tagSearch"]; label: string }[] = [
   { value: "scryfall", label: "Scryfall search" },
@@ -172,10 +161,10 @@ export function Settings() {
     drawTableFromOpeningHand,
     drawTableMaxCardsSeen,
     drawTableMaxCopies,
-    exactHeatBands,
-    cumulativeHeatBands,
+    heatBands,
   } = useAtomValue(settingsAtom);
   const dialog = useRef<HTMLDialogElement>(null);
+  const isDefaultHeatBands = heatBands.every((boundary, i) => boundary === DEFAULT_HEAT_BANDS[i]);
 
   return (
     <>
@@ -334,36 +323,25 @@ export function Settings() {
         </div>
 
         <div>
-          <span style={styles.label}>Table colours</span>
-          <div style={styles.sliders}>
-            {HEAT_BAND_SLIDERS.map(({ key, label }) => {
-              const value = key === "exactHeatBands" ? exactHeatBands : cumulativeHeatBands;
-              const isDefault = value.every((boundary, i) => boundary === DEFAULT_HEAT_BANDS[i]);
-              return (
-                <div key={key}>
-                  <div style={styles.sliderHeader}>
-                    {label}
-                    <button
-                      type="button"
-                      style={{ ...styles.reset, visibility: isDefault ? "hidden" : "visible" }}
-                      onClick={() => updateSettings({ [key]: [...DEFAULT_HEAT_BANDS] })}
-                    >
-                      Reset
-                    </button>
-                  </div>
-                  <BandSlider
-                    label={label}
-                    value={value}
-                    onChange={(bands) => updateSettings({ [key]: bands })}
-                  />
-                </div>
-              );
-            })}
+          <div style={styles.sliderHeader}>
+            <span style={styles.label}>Table colours</span>
+            <button
+              type="button"
+              style={{ ...styles.reset, visibility: isDefaultHeatBands ? "hidden" : "visible" }}
+              onClick={() => updateSettings({ heatBands: [...DEFAULT_HEAT_BANDS] })}
+            >
+              Reset
+            </button>
           </div>
+          <BandSlider
+            label="Table colours"
+            value={heatBands}
+            onChange={(bands) => updateSettings({ heatBands: bands })}
+          />
           <p style={styles.hint}>
             Where each colour starts. In exact tables, a cell's share of its column's most likely
-            outcome; in cumulative tables, which run much higher, the chance itself. Drag a handle
-            or use the arrow keys (Shift for steps of 5).
+            outcome; in cumulative tables, the chance itself. Drag a handle or use the arrow keys
+            (Shift for steps of 5).
           </p>
         </div>
       </Dialog>

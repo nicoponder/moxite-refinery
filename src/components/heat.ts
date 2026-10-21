@@ -1,24 +1,39 @@
+import { colord, extend } from "colord";
+import a11yPlugin from "colord/plugins/a11y";
 import type { CSSProperties } from "react";
 
-/** The draw tables' colour bands, from least to most likely, each dark enough for white text. */
+extend([a11yPlugin]);
+
+/** The draw tables' colour bands, from least to most likely. */
 export const HEAT_BANDS = [
-  { name: "Dark red", color: "hsl(0 70% 24%)" },
-  { name: "Red", color: "hsl(0 65% 34%)" },
-  { name: "Orange", color: "hsl(22 75% 32%)" },
-  { name: "Amber", color: "hsl(38 80% 30%)" },
-  { name: "Yellow", color: "hsl(54 75% 27%)" },
-  { name: "Lime", color: "hsl(80 60% 28%)" },
-  { name: "Green", color: "hsl(120 55% 28%)" },
-  { name: "Bright green", color: "hsl(130 65% 32%)" },
+  { name: "Dark red", color: "#670200" },
+  { name: "Red", color: "#e93e3a" },
+  { name: "Red Orange", color: "#ed683c" },
+  { name: "Orange", color: "#f78224" },
+  { name: "Yellow Orange", color: "#ffbe1a" },
+  { name: "Yellow", color: "#fff94c" },
+  { name: "Yellow Green", color: "#cbf72a" },
+  { name: "Lime", color: "#8bee00" },
+  { name: "Green", color: "#2e9801" },
 ] as const;
 
+const LIGHT_TEXT = "#fff";
+const DARK_TEXT = "#000";
+
+/** Each band's background, with whichever text colour has the higher WCAG contrast on it. */
+const BAND_STYLES: CSSProperties[] = HEAT_BANDS.map(({ color }) => {
+  const background = colord(color);
+  const light = background.contrast(LIGHT_TEXT) >= background.contrast(DARK_TEXT);
+  return { background: color, color: light ? LIGHT_TEXT : DARK_TEXT };
+});
+
 /**
- * The band colour for `fraction` (0–1). `boundaries` are where each band after
- * the first starts, in percent (0–100, in order; one fewer than the bands):
- * a value at a boundary takes the higher band.
+ * The band colour for `fraction` (0–1), with readable text on it. `boundaries`
+ * are where each band after the first starts, in percent (0–100, in order; one
+ * fewer than the bands): a value at a boundary takes the higher band.
  */
 export function heat(fraction: number, boundaries: readonly number[]): CSSProperties {
   const percent = fraction * 100;
   const band = boundaries.filter((boundary) => percent >= boundary).length;
-  return { background: HEAT_BANDS[band].color, color: "#fff" };
+  return BAND_STYLES[band];
 }

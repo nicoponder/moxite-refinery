@@ -79,18 +79,13 @@ interface DrawTableProps {
  * hand), up to a maximum; rows from 0 up to a maximum, both from the settings
  * and within the mainboard's and the group's sizes. Exact columns are each
  * coloured on their own scale, as a share of their most likely outcome (shown
- * or not); cumulative ones by the chance itself. Each mode has its own colour
- * band boundaries in the settings. A last row gives each column's expected
- * number of copies.
+ * or not); cumulative ones by the chance itself, both with the colour band
+ * boundaries in the settings. A last row gives each column's expected number
+ * of copies.
  */
 export function DrawTable({ deckSize, groupSize, mode }: DrawTableProps) {
-  const {
-    drawTableFromOpeningHand,
-    drawTableMaxCardsSeen,
-    drawTableMaxCopies,
-    exactHeatBands,
-    cumulativeHeatBands,
-  } = useAtomValue(settingsAtom);
+  const { drawTableFromOpeningHand, drawTableMaxCardsSeen, drawTableMaxCopies, heatBands } =
+    useAtomValue(settingsAtom);
   const firstCardsSeen = drawTableFromOpeningHand ? HAND_SIZE : 1;
   const lastCardsSeen = Math.min(drawTableMaxCardsSeen, deckSize);
   const cardsSeen = Array.from(
@@ -131,7 +126,7 @@ export function DrawTable({ deckSize, groupSize, mode }: DrawTableProps) {
         <td
           key={n}
           title={`At least ${k} of ${groupSize} in the first ${n} cards seen`}
-          style={{ ...styles.cell, ...(p < NEGLIGIBLE ? {} : heat(p, cumulativeHeatBands)) }}
+          style={{ ...styles.cell, ...(p < NEGLIGIBLE ? {} : heat(p, heatBands)) }}
         >
           {formatChance(p)}
         </td>
@@ -146,7 +141,7 @@ export function DrawTable({ deckSize, groupSize, mode }: DrawTableProps) {
         title={`Exactly ${k} of ${groupSize} in the first ${n} cards seen`}
         style={{
           ...styles.cell,
-          ...(p < NEGLIGIBLE ? {} : heat(p / columnMaxes[i], exactHeatBands)),
+          ...(p < NEGLIGIBLE ? {} : heat(p / columnMaxes[i], heatBands)),
         }}
       >
         {formatChance(p)}

@@ -34,7 +34,7 @@ const styles = {
   },
   legend: {
     display: "grid",
-    gridTemplateColumns: "repeat(4, 1fr)",
+    gridTemplateColumns: "repeat(3, 1fr)",
     gap: "0.25rem 0.75rem",
     margin: "0.4rem 0 0",
     padding: 0,
@@ -75,7 +75,7 @@ interface BandSliderProps {
   /** Where each band after the first starts, in percent (one fewer than `HEAT_BANDS`). */
   value: readonly number[];
   onChange: (value: number[]) => void;
-  /** Names the slider, e.g. "Exact tables". */
+  /** Names the slider, e.g. "Table colours". */
   label: string;
 }
 
