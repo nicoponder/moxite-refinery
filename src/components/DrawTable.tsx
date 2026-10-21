@@ -158,9 +158,11 @@ export function DrawTable({ deckSize, groupSize, mode }: DrawTableProps) {
             {cardsSeen.map((n) => (
               <th key={n} scope="col" style={styles.columnHeader}>
                 {n}
+                {/* Turn 0 is the opening hand, then one draw a turn; fewer cards have no turn. */}
+                {n >= HAND_SIZE && ` (T${n - HAND_SIZE})`}
               </th>
             ))}
-            <th style={{ ...styles.columnHeader, ...styles.axisLabel }}>← Cards seen</th>
+            <th style={{ ...styles.columnHeader, ...styles.axisLabel }}>← Cards (Turn #)</th>
           </tr>
         </thead>
         <tbody>
