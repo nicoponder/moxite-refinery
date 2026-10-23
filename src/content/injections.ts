@@ -1,11 +1,10 @@
 import { CardTags } from "../components/CardTags";
 import { DeckTags } from "../components/DeckTags";
 import { GroupSummary } from "../components/GroupSummary";
+import { GroupTagMenuItem } from "../components/GroupTagMenuItem";
 import { Settings } from "../components/Settings";
+import { GROUP_HEADER, groupHeaderTitle, openGroupMenuHeader } from "./groupMenu";
 import type { Injection } from "./injector";
-
-// A card group's header link in the deck list, in any view.
-const GROUP_HEADER = "a.table-deck-row-link:has(.fa-caret-down)";
 
 // Add new components here. Moxfield's class names are partly hashed build
 // output (e.g. `footer.e2coB2Hm3Jq3ppyCin9h`), so anchor on ids, tags and
@@ -56,10 +55,9 @@ export const injections: Injection[] = [
     // The group's name and total quantity, as "Lands (35)". The header's text
     // runs them together ("Lands(35)") in some views.
     target: (anchor) => {
-      const match = /^(.*?)\s*\((\d+)\)/.exec(
-        anchor.querySelector(GROUP_HEADER)?.textContent?.trim() ?? "",
-      );
-      return match ? `${match[1]} (${match[2]})` : null;
+      const header = anchor.querySelector(GROUP_HEADER);
+      const title = header && groupHeaderTitle(header);
+      return title ? `${title.name} (${title.count})` : null;
     },
     // Matches the "% of all symbols" captions under the color analysis.
     hostClassName: "small text-muted",
@@ -82,6 +80,25 @@ export const injections: Injection[] = [
         ?.closest("section.deckview > div") ?? null,
     position: "beforeend",
     component: DeckTags,
+  },
+  {
+    // The end of a card group's menu (its header's dropdown: "Copy Section to
+    // Clipboard", "Buy All"), which Moxfield portals to the end of `body`.
+    // Other dropdowns share its classes, so it's told apart by its first item.
+    // Which group it's for comes from the header last clicked (`groupMenu.ts`).
+    id: "group-menu",
+    anchor: () =>
+      [...document.querySelectorAll("body > .dropdown-menu.show > .dropdown-menu-parent")].find(
+        (menu) =>
+          openGroupMenuHeader() !== null &&
+          menu.querySelector(".dropdown-item")?.textContent?.trim() === "Copy Section to Clipboard",
+      ) ?? null,
+    position: "beforeend",
+    target: () => {
+      const header = openGroupMenuHeader();
+      return (header && groupHeaderTitle(header)?.name) ?? null;
+    },
+    component: GroupTagMenuItem,
   },
   {
     // The deck page's fixed bottom bar; goes at the end of its right-hand

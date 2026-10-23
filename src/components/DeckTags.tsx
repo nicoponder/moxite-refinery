@@ -5,6 +5,7 @@ import type { InjectionProps } from "../content/injector";
 import { moxfieldAuthorization, refreshMoxfieldDeck } from "../content/moxfieldPage";
 import type { ScryfallTag } from "../content/scryfall";
 import { addAuthorTag, deckAtom, oracleTagsAtom, settingsAtom } from "../state";
+import { DeleteTagDialog } from "./DeleteTagDialog";
 import { searchLink, TAG_KINDS, tagPillStyle } from "./tagLinks";
 
 // The boards a deck is played with; the maybeboard, sideboard and tokens aren't counted.
@@ -250,6 +251,8 @@ export function DeckTags({ deckId }: InjectionProps) {
         <span style={styles.action}>{expanded ? "Collapse" : "Expand"}</span>
       </button>
       {expanded && <div style={styles.body}>{body}</div>}
+      {/* For the tag group menus' "Delete Moxfield Tag", which unmount with the menu. */}
+      <DeleteTagDialog deckId={deckId} />
     </>
   );
 }

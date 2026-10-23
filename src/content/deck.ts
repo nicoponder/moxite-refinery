@@ -174,15 +174,21 @@ interface BulkEdit {
 // back changes nothing but what was edited.
 const BULK_EDIT_OPTIONS = { allowMultiplePrintings: true, ignoreFlavorNames: false };
 
-/** The tags at the end of a bulk edit line, without their "#" or "#!". */
-function lineTags(line: string): string[] {
+/** A bulk edit line split into the entry and its tags ("#tag", or "#!tag" for global ones). */
+function splitLine(line: string): { entry: string; tags: string[] } {
   const start = line.indexOf(" #");
-  if (start < 0) return [];
-  return line
-    .slice(start + 1)
-    .split(/ (?=#)/)
-    .map((tag) => tag.replace(/^#!?/, ""));
+  if (start < 0) return { entry: line.trimEnd(), tags: [] };
+  return {
+    entry: line.slice(0, start),
+    tags: line
+      .slice(start + 1)
+      .trimEnd()
+      .split(/ (?=#)/),
+  };
 }
+
+/** A tag's name, without its "#" or "#!". */
+const tagName = (tag: string) => tag.replace(/^#!?/, "");
 
 /** A card tag as the deck's owner sees it: a deck tag, or one of their account-wide ones. */
 interface OwnerTag {
@@ -191,10 +197,12 @@ interface OwnerTag {
 }
 
 /**
- * Gives each named card (by `card.name`) the deck tag `tagName` in the deck
- * `publicId`, which the signed-in user must be able to edit, keeping the
- * card's other tags; cards that already have it are left alone. Returns how
- * many entries it tagged, and the names of any cards it couldn't find.
+ * Changes cards' tags in the deck `publicId`, which the signed-in user must be
+ * able to edit: `edit` gets each card's tags, as "#tag" (deck tags) or "#!tag"
+ * (global ones), and returns their new list, or null to leave them be. It sees
+ * only the named cards (by `card.name`), or every card if `cardNames` is
+ * omitted. Returns how many entries it changed, and the names of any named
+ * cards it couldn't find.
  *
  * It saves through Bulk Edit, one request for every board but the
  * commanders, which Bulk Edit leaves out and which get a request each.
@@ -204,12 +212,12 @@ interface OwnerTag {
  * cards' tags again, so have it refetch the deck afterwards
  * (`refreshMoxfieldDeck()`).
  */
-export async function tagCards(
+async function editCardTags(
   publicId: string,
-  cardNames: string[],
-  tagName: string,
   authorization: string,
-): Promise<{ tagged: number; missing: string[] }> {
+  edit: (tags: string[]) => string[] | null,
+  cardNames?: string[],
+): Promise<{ changed: number; missing: string[] }> {
   const id = encodeURIComponent(publicId);
   const [deck, bulkEdit] = await Promise.all([
     moxfieldJson<Deck>(`/v3/decks/all/${id}`, authorization),
@@ -218,14 +226,13 @@ export async function tagCards(
       authorization,
     ),
   ]);
-  const wanted = new Set(cardNames);
-  const key = tagKey(tagName);
+  const wanted = (name: string) => !cardNames || cardNames.includes(name);
   const editHeaders = {
     "Content-Type": "application/json",
     "X-Public-Deck-ID": publicId,
     "X-Deck-Version": String(deck.version ?? 0),
   };
-  let tagged = 0;
+  let changed = 0;
   const found = new Set<string>();
 
   // Lines are found by printing, "(SET) 123" after the name, since the name
@@ -236,14 +243,13 @@ export async function tagCards(
     const match = /^\d+x? .+? \(([A-Za-z0-9]+)\) (\S+)/.exec(line);
     return match ? printing(match[1], match[2]) : null;
   };
-  const wantedPrintings = new Map(
+  const printings = new Map(
     Object.entries(deck.boards)
       .filter(([board]) => board !== "commanders")
       .flatMap(([, board]) => Object.values(board?.cards ?? {}))
-      .filter((entry) => wanted.has(entry.card.name))
+      .filter((entry) => wanted(entry.card.name))
       .map((entry) => [printing(entry.card.set, entry.card.cn), entry.card.name]),
   );
-  let changed = false;
   const boards = Object.fromEntries(
     Object.entries(bulkEdit.boards).map(([board, text]) => [
       board,
@@ -251,13 +257,14 @@ export async function tagCards(
         .split("\n")
         .map((line) => {
           const linePrint = linePrinting(line);
-          const name = linePrint && wantedPrintings.get(linePrint);
+          const name = linePrint && printings.get(linePrint);
           if (!name) return line;
           found.add(name);
-          if (lineTags(line).some((tag) => tagKey(tag) === key)) return line;
-          changed = true;
-          tagged++;
-          return `${line.trimEnd()} #${tagName}`;
+          const { entry, tags } = splitLine(line);
+          const edited = edit(tags);
+          if (!edited) return line;
+          changed++;
+          return [entry, ...edited].join(" ");
         })
         .join("\n"),
     ]),
@@ -281,13 +288,13 @@ export async function tagCards(
     if (!result.isSuccessful) throw new Error("Moxfield didn't accept the bulk edit");
   }
 
-  // Bulk Edit leaves the commanders out, so they're tagged one by one. Each
+  // Bulk Edit leaves the commanders out, so they're edited one by one. Each
   // request sends the card's whole list of tags, as Moxfield's own tag editor
-  // does ("#name" for deck tags, "#!name" for global ones), so this needs the
-  // owner's view of the deck, the only one that tells the two apart.
+  // does, so this needs the owner's view of the deck, the only one that tells
+  // deck tags from global ones.
   const commanders = Object.values(deck.boards.commanders?.cards ?? {})
     .map((entry) => entry.card)
-    .filter((card) => wanted.has(card.name));
+    .filter((card) => wanted(card.name));
   if (commanders.length) {
     const { tags } = await moxfieldJson<{ tags?: Record<string, OwnerTag[] | undefined> }>(
       `/v1/decks/all/${id}/viewer`,
@@ -295,23 +302,56 @@ export async function tagCards(
     );
     for (const card of commanders) {
       found.add(card.name);
-      const own = tags?.[card.name] ?? [];
-      if (own.some((tag) => tagKey(tag.tagName) === key)) continue;
+      const edited = edit(
+        (tags?.[card.name] ?? []).map((tag) => (tag.isGlobal ? "#!" : "#") + tag.tagName),
+      );
+      if (!edited) continue;
       await moxfieldJson<unknown>(
         `/v2/decks/${encodeURIComponent(deck.id)}/cards/${encodeURIComponent(card.id)}/tags`,
         authorization,
-        {
-          method: "PUT",
-          headers: editHeaders,
-          body: JSON.stringify({
-            tags: [...own.map((tag) => (tag.isGlobal ? "#!" : "#") + tag.tagName), `#${tagName}`],
-          }),
-        },
+        { method: "PUT", headers: editHeaders, body: JSON.stringify({ tags: edited }) },
       );
-      tagged++;
+      changed++;
     }
   }
-  return { tagged, missing: [...wanted].filter((name) => !found.has(name)) };
+  return { changed, missing: (cardNames ?? []).filter((name) => !found.has(name)) };
+}
+
+/**
+ * Gives each named card (by `card.name`) the deck tag `name`, keeping its other
+ * tags; cards that already have it are left alone. See `editCardTags()`.
+ */
+export async function tagCards(
+  publicId: string,
+  cardNames: string[],
+  name: string,
+  authorization: string,
+): Promise<{ tagged: number; missing: string[] }> {
+  const { changed, missing } = await editCardTags(
+    publicId,
+    authorization,
+    (tags) =>
+      tags.some((tag) => tagKey(tagName(tag)) === tagKey(name)) ? null : [...tags, `#${name}`],
+    cardNames,
+  );
+  return { tagged: changed, missing };
+}
+
+/**
+ * Removes the card tag `name` (exactly, deck or global) from every card in the
+ * deck, keeping their other tags. Returns how many entries had it. See
+ * `editCardTags()`.
+ */
+export async function deleteCardTag(
+  publicId: string,
+  name: string,
+  authorization: string,
+): Promise<number> {
+  const { changed } = await editCardTags(publicId, authorization, (tags) => {
+    const kept = tags.filter((tag) => tagName(tag) !== name);
+    return kept.length < tags.length ? kept : null;
+  });
+  return changed;
 }
 
 /** A copy of `deck` whose `authorTags` give the named cards the tag `tagName`, as `tagCards()` does. */
@@ -321,5 +361,15 @@ export function withAuthorTag(deck: Deck, cardNames: string[], tagName: string):
     const tags = authorTags[name] ?? [];
     if (!tags.some((tag) => tagKey(tag) === tagKey(tagName))) authorTags[name] = [...tags, tagName];
   }
+  return { ...deck, authorTags };
+}
+
+/** A copy of `deck` whose `authorTags` no longer have the tag `tagName`, as `deleteCardTag()` leaves it. */
+export function withoutAuthorTag(deck: Deck, tagName: string): Deck {
+  const authorTags = Object.fromEntries(
+    Object.entries(deck.authorTags ?? {})
+      .map(([card, tags]) => [card, tags.filter((tag) => tag !== tagName)] as const)
+      .filter(([, tags]) => tags.length),
+  );
   return { ...deck, authorTags };
 }

@@ -1,5 +1,11 @@
 import { atom, createStore, type PrimitiveAtom } from "jotai";
-import { fetchDeck, rememberDeck, withAuthorTag, type Deck } from "./content/deck";
+import {
+  fetchDeck,
+  rememberDeck,
+  withAuthorTag,
+  withoutAuthorTag,
+  type Deck,
+} from "./content/deck";
 import {
   fetchTaggableIds,
   fetchTags,
@@ -203,11 +209,27 @@ export function setDeckId(deckId: string | null): void {
  * tag `tagName`, after `tagCards()` gave it to them, without refetching the deck.
  */
 export function addAuthorTag(cardNames: string[], tagName: string): void {
+  updateDeck((deck) => withAuthorTag(deck, cardNames, tagName));
+}
+
+/** Records that the current deck no longer has the Moxfield card tag `tagName`, after `deleteCardTag()`. */
+export function removeAuthorTag(tagName: string): void {
+  updateDeck((deck) => withoutAuthorTag(deck, tagName));
+}
+
+/** Replaces the current deck, if loaded, with `update`'s copy of it, for later loads too. */
+function updateDeck(update: (deck: Deck) => Deck): void {
   const deckId = store.get(deckIdAtom);
   const deck = store.get(deckAtom);
   if (!deckId || deck.status !== "loaded") return;
-  const value = withAuthorTag(deck.value, cardNames, tagName);
+  const value = update(deck.value);
   store.set(deckAtom, { status: "loaded", value });
   // Coming back to this deck later in the session shouldn't bring the old copy back.
   rememberDeck(deckId, value);
 }
+
+/**
+ * The Moxfield card tag the user chose to delete from a tag group's menu,
+ * awaiting confirmation (`DeleteTagDialog`), or null.
+ */
+export const tagDeletionAtom = atom<string | null>(null);
