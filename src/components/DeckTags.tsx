@@ -1,0 +1,255 @@
+import { useAtomValue } from "jotai";
+import { useMemo, useState, type CSSProperties } from "react";
+import { canSearchDeck, tagCards, tagKey, type Deck } from "../content/deck";
+import type { InjectionProps } from "../content/injector";
+import { moxfieldAuthorization, refreshMoxfieldDeck } from "../content/moxfieldPage";
+import type { ScryfallTag } from "../content/scryfall";
+import { addAuthorTag, deckAtom, oracleTagsAtom, settingsAtom } from "../state";
+import { searchLink, TAG_KINDS, tagPillStyle } from "./tagLinks";
+
+// The boards a deck is played with; the maybeboard, sideboard and tokens aren't counted.
+const BOARDS = ["commanders", "mainboard"];
+// Tags on fewer copies than this are left out, as too rare to say much about the deck.
+const MIN_COPIES = 3;
+// For Scryfall tags the deck's author already has a Moxfield card tag for.
+const MATCHED_BACKGROUND = "hsl(140 60% 42% / 0.35)";
+
+// Mimics Moxfield's own collapsible sections above it ("Tokens", "Recent
+// History"): an `hr`, then a bold title, a dash and an "Expand" link.
+const styles = {
+  // Moxfield's `hr`, which it recolours from Bootstrap's.
+  divider: {
+    margin: "1rem 0",
+    border: 0,
+    borderTop: "var(--bs-border-width, 1px) solid var(--bs-border-color, #dee2e6)",
+    opacity: 0.4,
+  },
+  toggle: {
+    display: "block",
+    width: "100%",
+    margin: "1rem 0",
+    padding: 0,
+    border: 0,
+    background: "none",
+    color: "inherit",
+    font: "inherit",
+    textAlign: "left",
+    cursor: "pointer",
+  },
+  dash: { margin: "0 0.5rem" },
+  action: { color: "var(--bs-primary)" },
+  body: { marginBottom: "1rem" },
+  list: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "0.3rem",
+    margin: 0,
+    padding: 0,
+    listStyle: "none",
+  },
+  count: { marginLeft: "0.35rem", opacity: 0.7 },
+  // A pill that's a button rather than a link.
+  button: { border: 0, font: "inherit", cursor: "pointer" },
+  note: { margin: 0, opacity: 0.7 },
+  status: { margin: "0.5rem 0 0", opacity: 0.7 },
+} satisfies Record<string, CSSProperties>;
+
+interface TagCount {
+  slug: string;
+  label: string;
+  /** Copies in the deck with this tag, directly or through a more specific one. */
+  copies: number;
+  /** Whether any card has the tag itself, rather than only a more specific one under it. */
+  direct: boolean;
+  /** The cards with it, by `card.name`. */
+  names: string[];
+  /** The same, as "Island" or "Island ×10", by name. */
+  cards: string[];
+  /** Whether the deck's author has a Moxfield card tag of the same name. */
+  matched: boolean;
+}
+
+/**
+ * The oracle tags on at least `MIN_COPIES` of the deck's cards: those matching
+ * one of the author's Moxfield card tags first, then most copies first.
+ */
+function countTags(deck: Deck, oracleTags: Map<string, ScryfallTag[]>): TagCount[] {
+  const authorTags = new Set(
+    Object.values(deck.authorTags ?? {})
+      .flat()
+      .map(tagKey),
+  );
+  const counts = new Map<string, TagCount>();
+  for (const board of BOARDS) {
+    for (const { quantity, card } of Object.values(deck.boards[board]?.cards ?? {})) {
+      for (const tag of oracleTags.get(card.scryfall_id) ?? []) {
+        let count = counts.get(tag.slug);
+        if (!count) {
+          count = {
+            slug: tag.slug,
+            label: tag.label,
+            copies: 0,
+            direct: false,
+            names: [],
+            cards: [],
+            matched: authorTags.has(tagKey(tag.label)),
+          };
+          counts.set(tag.slug, count);
+        }
+        count.copies += quantity;
+        count.direct ||= !tag.inherited;
+        count.names.push(card.name);
+        count.cards.push(quantity > 1 ? `${card.name} ×${quantity}` : card.name);
+      }
+    }
+  }
+  const common = [...counts.values()].filter((count) => count.copies >= MIN_COPIES);
+  for (const count of common) count.cards.sort((a, b) => a.localeCompare(b));
+  return common.sort(
+    (a, b) =>
+      Number(b.matched) - Number(a.matched) ||
+      b.copies - a.copies ||
+      a.label.localeCompare(b.label),
+  );
+}
+
+/** A collapsible list of the Scryfall oracle tags across the deck, below the deck list. */
+export function DeckTags({ deckId }: InjectionProps) {
+  const deckState = useAtomValue(deckAtom);
+  const oracleTags = useAtomValue(oracleTagsAtom);
+  const { tagSearch } = useAtomValue(settingsAtom);
+  const [expanded, setExpanded] = useState(false);
+  // The Moxfield card tag being created from a Scryfall tag, and how it went:
+  // the number of cards tagged once done, or the error.
+  const [creating, setCreating] = useState<{
+    label: string;
+    tagged?: number;
+    /** Cards it couldn't find in the deck as saved. */
+    missing?: string[];
+    error?: unknown;
+  } | null>(null);
+  const { searchPrefix, background } = TAG_KINDS.oracle;
+
+  const tags = useMemo(
+    () =>
+      deckState.status === "loaded" && oracleTags.status === "loaded"
+        ? countTags(deckState.value, oracleTags.value)
+        : null,
+    [deckState, oracleTags],
+  );
+
+  /** Tags the tag's cards with a Moxfield card tag of the same name. */
+  async function createTag(tag: TagCount) {
+    setCreating({ label: tag.label });
+    try {
+      const authorization = await moxfieldAuthorization();
+      if (!authorization) throw new Error("Couldn't find your Moxfield sign-in");
+      const { tagged, missing } = await tagCards(deckId, tag.names, tag.label, authorization);
+      addAuthorTag(
+        tag.names.filter((name) => !missing.includes(name)),
+        tag.label,
+      );
+      setCreating({ label: tag.label, tagged, missing });
+      // Moxfield's page still has the old tags and version, and would save
+      // them over these; if it can't be made to refetch the deck, reload it.
+      if (!(await refreshMoxfieldDeck(deckId))) location.reload();
+    } catch (error) {
+      console.error("[moxite-refinery]", error);
+      setCreating({ label: tag.label, error });
+    }
+  }
+
+  let body;
+  if (tags) {
+    // Only decks the user can edit have the add-card search, and card tags to add.
+    const canEdit = canSearchDeck();
+    const searchDeckId = tagSearch === "moxfield" && canEdit ? deckId : null;
+    const busy = creating !== null && creating.tagged === undefined && creating.error === undefined;
+    body = tags.length ? (
+      <>
+        <ul style={styles.list}>
+          {tags.map((tag) => {
+            const title =
+              (tag.matched ? `Moxfield tag "${tag.label}" exists\n\n` : "") +
+              (tag.matched || !canEdit
+                ? ""
+                : `Click to create the Moxfield tag "${tag.label}" on these cards\n\n`) +
+              (tag.direct
+                ? ""
+                : `Inherited: these cards have more specific tags under "${tag.label}"\n\n`) +
+              tag.cards.join("\n");
+            const style = {
+              ...tagPillStyle,
+              background: tag.matched ? MATCHED_BACKGROUND : background,
+              opacity: tag.direct ? 1 : 0.6,
+            };
+            const content = (
+              <>
+                {tag.label}
+                <span style={styles.count}>{tag.copies}</span>
+              </>
+            );
+            return (
+              <li key={tag.slug}>
+                {tag.matched || !canEdit ? (
+                  <a
+                    {...searchLink(`${searchPrefix}:${tag.slug}`, searchDeckId)}
+                    title={title}
+                    style={style}
+                  >
+                    {content}
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void createTag(tag)}
+                    title={title}
+                    style={{ ...style, ...styles.button, cursor: busy ? "progress" : "pointer" }}
+                  >
+                    {content}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+        {creating && (
+          <p style={styles.status}>
+            {creating.error !== undefined
+              ? `Couldn't create the Moxfield tag "${creating.label}": ${String(creating.error)}`
+              : creating.tagged !== undefined
+                ? `Created the Moxfield tag "${creating.label}" on ${creating.tagged} ${creating.tagged === 1 ? "card" : "cards"}` +
+                  (creating.missing?.length
+                    ? `; couldn't find ${creating.missing.join(", ")} in the deck`
+                    : "")
+                : `Creating the Moxfield tag "${creating.label}"…`}
+          </p>
+        )}
+      </>
+    ) : (
+      <p style={styles.note}>None</p>
+    );
+  } else if (deckState.status === "error" || oracleTags.status === "error") {
+    body = <p style={styles.note}>Couldn't load oracle tags</p>;
+  } else {
+    body = <p style={styles.note}>Loading…</p>;
+  }
+
+  return (
+    <>
+      <hr style={styles.divider} />
+      <button
+        type="button"
+        aria-expanded={expanded}
+        onClick={() => setExpanded(!expanded)}
+        style={styles.toggle}
+      >
+        <strong>Oracle Tags{tags ? ` (${tags.length})` : ""}</strong>
+        <span style={styles.dash}>–</span>
+        <span style={styles.action}>{expanded ? "Collapse" : "Expand"}</span>
+      </button>
+      {expanded && <div style={styles.body}>{body}</div>}
+    </>
+  );
+}

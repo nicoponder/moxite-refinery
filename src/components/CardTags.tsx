@@ -1,16 +1,10 @@
 import { useAtomValue } from "jotai";
-import type { AnchorHTMLAttributes, CSSProperties, MouseEvent } from "react";
-import { canSearchDeck, deckSearchPath, navigateInApp } from "../content/deck";
+import type { CSSProperties } from "react";
+import { canSearchDeck } from "../content/deck";
 import type { InjectionProps } from "../content/injector";
 import type { ScryfallTag } from "../content/scryfall";
 import { artTagsAtom, deckAtom, oracleTagsAtom, settingsAtom, type Loadable } from "../state";
-
-// Translucent fills over inherited text colour, so pills read on both of
-// Moxfield's light and dark themes.
-const KINDS = {
-  oracle: { title: "Oracle tags", searchPrefix: "otag", background: "hsl(210 85% 55% / 0.28)" },
-  art: { title: "Art tags", searchPrefix: "atag", background: "hsl(330 75% 58% / 0.28)" },
-} as const;
+import { searchLink, TAG_KINDS, tagPillStyle } from "./tagLinks";
 
 const styles = {
   section: { display: "flex", flexDirection: "column", gap: "0.75rem" },
@@ -30,41 +24,13 @@ const styles = {
     padding: 0,
     listStyle: "none",
   },
-  pill: {
-    display: "inline-block",
-    padding: "0.15rem 0.55rem",
-    borderRadius: "999px",
-    fontSize: "0.8rem",
-    lineHeight: 1.5,
-    color: "inherit",
-    textDecoration: "none",
-  },
   note: { margin: 0, fontSize: "0.85rem", opacity: 0.7 },
   // Matches Bootstrap's `hr.my-4`, which Moxfield uses between modal sections.
   divider: { margin: "1.5rem 0", border: 0, borderTop: "1px solid currentColor", opacity: 0.25 },
 } satisfies Record<string, CSSProperties>;
 
-/** Follows a plain left click within the app; modified clicks (new tab etc.) keep the browser's behaviour. */
-function followInApp(event: MouseEvent<HTMLAnchorElement>) {
-  if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey)
-    return;
-  event.preventDefault();
-  navigateInApp(event.currentTarget.getAttribute("href")!);
-}
-
-/** Link attributes for a search: the deck's add-card search when `deckId` is given, else Scryfall's in a new tab. */
-function searchLink(query: string, deckId: string | null): AnchorHTMLAttributes<HTMLAnchorElement> {
-  return deckId
-    ? { href: deckSearchPath(deckId, query), onClick: followInApp }
-    : {
-        href: `https://scryfall.com/search?q=${encodeURIComponent(query)}`,
-        target: "_blank",
-        rel: "noreferrer",
-      };
-}
-
 interface TagGroupProps {
-  kind: keyof typeof KINDS;
+  kind: keyof typeof TAG_KINDS;
   state: Loadable<Map<string, ScryfallTag[]>>;
   scryfallId: string;
   /** The deck whose add-card search tags link to, or null to link to Scryfall. */
@@ -72,7 +38,7 @@ interface TagGroupProps {
 }
 
 function TagGroup({ kind, state, scryfallId, searchDeckId }: TagGroupProps) {
-  const { title, searchPrefix, background } = KINDS[kind];
+  const { title, searchPrefix, background } = TAG_KINDS[kind];
 
   let body;
   if (state.status === "loaded") {
@@ -88,7 +54,7 @@ function TagGroup({ kind, state, scryfallId, searchDeckId }: TagGroupProps) {
                   ? `Inherited: the card has a more specific tag under "${tag.label}"`
                   : undefined
               }
-              style={{ ...styles.pill, background, opacity: tag.inherited ? 0.6 : 1 }}
+              style={{ ...tagPillStyle, background, opacity: tag.inherited ? 0.6 : 1 }}
             >
               {tag.label}
             </a>

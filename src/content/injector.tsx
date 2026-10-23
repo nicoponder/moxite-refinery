@@ -44,6 +44,20 @@ function render(root: Root, injection: Injection, deckId: string, target: string
   );
 }
 
+/** Whether `host` is still where `position` put it relative to `anchor`. */
+function inPlace(host: Element, anchor: Element, position: InsertPosition): boolean {
+  switch (position) {
+    case "beforebegin":
+      return anchor.previousSibling === host;
+    case "afterbegin":
+      return anchor.firstChild === host;
+    case "beforeend":
+      return anchor.lastChild === host;
+    case "afterend":
+      return anchor.nextSibling === host;
+  }
+}
+
 interface Mounted {
   host: HTMLElement;
   root: Root;
@@ -119,7 +133,15 @@ export function startInjector(injections: Injection[]): void {
         const current = entries.get(anchor);
         if (!current) {
           mount(injection, anchor, deckId, target);
-        } else if (deckChanged || target !== current.target) {
+          continue;
+        }
+        // Moxfield inserts its own elements without regard for ours, e.g.
+        // appending a section's content when it expands, which can leave a
+        // component on the wrong side of it.
+        if (!inPlace(current.host, anchor, injection.position)) {
+          anchor.insertAdjacentElement(injection.position, current.host);
+        }
+        if (deckChanged || target !== current.target) {
           current.target = target;
           render(current.root, injection, deckId, target);
         }

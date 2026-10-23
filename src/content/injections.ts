@@ -1,4 +1,5 @@
 import { CardTags } from "../components/CardTags";
+import { DeckTags } from "../components/DeckTags";
 import { GroupSummary } from "../components/GroupSummary";
 import { Settings } from "../components/Settings";
 import type { Injection } from "./injector";
@@ -63,6 +64,24 @@ export const injections: Injection[] = [
     // Matches the "% of all symbols" captions under the color analysis.
     hostClassName: "small text-muted",
     component: GroupSummary,
+  },
+  {
+    // Below the deck list's collapsible sections ("Tokens", "Considering" for
+    // the maybeboard, and "Recent History"), which close the deck list's
+    // column. Each is a toggle (a `div.cursor-pointer` with a bold title)
+    // between `hr`s, and expands below itself. Decks without tokens or a
+    // maybeboard lack those sections, so any of them will do.
+    id: "deck-tags",
+    anchor: () =>
+      [...document.querySelectorAll("section.deckview div.cursor-pointer > strong")]
+        .find((title) =>
+          /^(?:Tokens \(\d+\)|Considering \(\d+\)|Recent History)$/.test(
+            title.textContent?.trim() ?? "",
+          ),
+        )
+        ?.closest("section.deckview > div") ?? null,
+    position: "beforeend",
+    component: DeckTags,
   },
   {
     // The deck page's fixed bottom bar; goes at the end of its right-hand

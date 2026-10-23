@@ -12,6 +12,12 @@
   "content_scripts": [
     {
       "matches": ["https://moxfield.com/decks/*"],
+      "js": ["main-world.js"],
+      "run_at": "document_idle",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://moxfield.com/decks/*"],
       "js": ["content.js"],
       "run_at": "document_idle"
     }

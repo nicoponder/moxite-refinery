@@ -1,5 +1,5 @@
 import { atom, createStore, type PrimitiveAtom } from "jotai";
-import { fetchDeck, type Deck } from "./content/deck";
+import { fetchDeck, rememberDeck, withAuthorTag, type Deck } from "./content/deck";
 import {
   fetchTaggableIds,
   fetchTags,
@@ -196,4 +196,18 @@ export function setDeckId(deckId: string | null): void {
     void loadInto(oracleTagsAtom, deckId, () => ids.then((cards) => fetchTags("oracle", cards)));
     loadArtTags();
   });
+}
+
+/**
+ * Records that the named cards of the current deck now have the Moxfield card
+ * tag `tagName`, after `tagCards()` gave it to them, without refetching the deck.
+ */
+export function addAuthorTag(cardNames: string[], tagName: string): void {
+  const deckId = store.get(deckIdAtom);
+  const deck = store.get(deckAtom);
+  if (!deckId || deck.status !== "loaded") return;
+  const value = withAuthorTag(deck.value, cardNames, tagName);
+  store.set(deckAtom, { status: "loaded", value });
+  // Coming back to this deck later in the session shouldn't bring the old copy back.
+  rememberDeck(deckId, value);
 }
