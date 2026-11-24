@@ -18,7 +18,7 @@ Download the [latest signed Firefox extension (.xpi)](https://github.com/nicopon
 - **Draw odds by card group.** See how many lands to expect in your opening seven, or how likely
   you are to see a ramp card by a given turn. Use a group's info button for more detail, such as
   the difference between drawing exactly two lands and drawing at least two.
-- **Scryfall tags in card details.** Open a card's **View Details** panel to see oracle tags
+- **Scryfall tags in card details.** Open a card's details (its ⋯ menu, then the card's name) to see oracle tags
   describing what it does. Click a tag to find similar cards on Scryfall, or use Moxfield's
   add-card search on a deck you can edit. Art tags are available in settings.
 - **Deck-wide tag management.** Expand **Oracle Tags** below the deck list to see tags shared by

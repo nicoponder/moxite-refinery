@@ -5,6 +5,7 @@ npm install
 npm run dev     # rebuilds dist/ on change
 npm run build   # typecheck + production build
 npm run check   # typecheck + oxlint + oxfmt --check
+npm test        # build, then check each feature on a live Moxfield deck in Chromium
 npm run format  # format with oxfmt
 ```
 
@@ -14,6 +15,12 @@ Load `dist/` as an unpacked extension:
 - **Firefox:** `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → `dist/manifest.json`
 
 Reload the extension (and the Moxfield tab) after each rebuild.
+
+`npm test` runs Playwright tests that load the built extension into Chromium (run
+`npx playwright install chromium` once first) and check that each feature appears in the right
+place on a live Moxfield deck. They need a network connection and open a browser window, since
+Moxfield doesn't load in headless Chromium. When Moxfield changes its page, they show which
+features it broke.
 
 ## Build from source (for add-on reviewers)
 

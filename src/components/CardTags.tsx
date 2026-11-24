@@ -6,16 +6,11 @@ import type { ScryfallTag } from "../content/scryfall";
 import { artTagsAtom, deckAtom, oracleTagsAtom, settingsAtom, type Loadable } from "../state";
 import { searchLink, TAG_KINDS, tagPillStyle } from "./tagLinks";
 
+// Mimics the card details modal's own sections ("Card Tags", "Card Legality"):
+// a bold title, the content, then an `hr`.
 const styles = {
-  section: { display: "flex", flexDirection: "column", gap: "0.75rem" },
-  heading: {
-    margin: "0 0 0.4rem",
-    fontSize: "0.8rem",
-    fontWeight: 600,
-    textTransform: "uppercase",
-    letterSpacing: "0.04em",
-    opacity: 0.75,
-  },
+  // The header's `mb-2`.
+  heading: { margin: "0 0 0.5rem", fontSize: "inherit", fontWeight: 700 },
   list: {
     display: "flex",
     flexWrap: "wrap",
@@ -24,9 +19,15 @@ const styles = {
     padding: 0,
     listStyle: "none",
   },
-  note: { margin: 0, fontSize: "0.85rem", opacity: 0.7 },
-  // Matches Bootstrap's `hr.my-4`, which Moxfield uses between modal sections.
-  divider: { margin: "1.5rem 0", border: 0, borderTop: "1px solid currentColor", opacity: 0.25 },
+  // Moxfield's `.text-nodata` ("No tags for this card."): small, italic and dimmed.
+  note: { margin: 0, fontSize: "0.8em", fontStyle: "italic", opacity: 0.5 },
+  // Moxfield's `hr.my-4`, which it recolours from Bootstrap's.
+  divider: {
+    margin: "1.5rem 0",
+    border: 0,
+    borderTop: "var(--bs-border-width, 1px) solid var(--bs-border-color, #dee2e6)",
+    opacity: 0.4,
+  },
 } satisfies Record<string, CSSProperties>;
 
 interface TagGroupProps {
@@ -62,7 +63,7 @@ function TagGroup({ kind, state, scryfallId, searchDeckId }: TagGroupProps) {
         ))}
       </ul>
     ) : (
-      <p style={styles.note}>None</p>
+      <p style={styles.note}>No {title.toLowerCase()} for this card.</p>
     );
   } else if (state.status === "error") {
     body = <p style={styles.note}>Couldn't load {title.toLowerCase()}</p>;
@@ -71,10 +72,11 @@ function TagGroup({ kind, state, scryfallId, searchDeckId }: TagGroupProps) {
   }
 
   return (
-    <div>
+    <section>
       <h3 style={styles.heading}>{title}</h3>
       {body}
-    </div>
+      <hr style={styles.divider} />
+    </section>
   );
 }
 
@@ -100,23 +102,20 @@ export function CardTags({ deckId, target: moxfieldCardId }: InjectionProps) {
 
   return (
     <>
-      <section style={styles.section}>
+      <TagGroup
+        kind="oracle"
+        state={oracleTags}
+        scryfallId={entry.card.scryfall_id}
+        searchDeckId={searchDeckId}
+      />
+      {showArtTags && (
         <TagGroup
-          kind="oracle"
-          state={oracleTags}
+          kind="art"
+          state={artTags}
           scryfallId={entry.card.scryfall_id}
           searchDeckId={searchDeckId}
         />
-        {showArtTags && (
-          <TagGroup
-            kind="art"
-            state={artTags}
-            scryfallId={entry.card.scryfall_id}
-            searchDeckId={searchDeckId}
-          />
-        )}
-      </section>
-      <hr style={styles.divider} />
+      )}
     </>
   );
 }

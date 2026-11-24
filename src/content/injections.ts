@@ -7,19 +7,18 @@ import { GROUP_HEADER, groupHeaderTitle, openGroupMenuHeader } from "./groupMenu
 import type { Injection } from "./injector";
 
 // Add new components here. Moxfield's class names are partly hashed build
-// output (e.g. `footer.e2coB2Hm3Jq3ppyCin9h`), so anchor on ids, tags and
-// Bootstrap classes instead.
+// output (e.g. `div.p1MgompCDAeWEqmrjXoI`), so anchor on its `data-testid`
+// attributes, ids, tags and Bootstrap classes instead.
 export const injections: Injection[] = [
   {
-    // Card details modal (a card's ⋯ menu → View Details). Goes in the right
-    // column, just above the format legality grid (the column's `.row`).
-    // Prev/Next replaces the whole modal, which remounts this.
+    // Card details modal (a card's ⋯ menu → its name, at the top of the menu).
+    // The modal's right-hand column is a run of sections, each a header (a
+    // `div` with a bold title) followed by its content and an `hr`: rules
+    // text, "Card Tags" (the author's), "Card Legality", "Rulings". This goes
+    // just before the "Card Legality" header. Prev/Next replaces the whole
+    // modal, which remounts this.
     id: "card-tags",
-    anchor: () =>
-      document
-        .querySelector(".modal.show h1")
-        ?.closest(".col-sm-6")
-        ?.querySelector(":scope > .row") ?? null,
+    anchor: () => document.querySelector('.modal.show [data-testid="card-modal-legality"]'),
     position: "beforebegin",
     // The card image's URL holds Moxfield's card id, .../cards/card-<card.id>-normal.webp,
     // or for multi-face cards a face id, .../cards/card-face-<card_faces[].id>-normal.webp.
@@ -31,9 +30,9 @@ export const injections: Injection[] = [
     component: CardTags,
   },
   {
-    // Above each group of cards in the mainboard, in every view (Text,
-    // Condensed Text, Visual Grid, Visual Stacks, Visual Stacks (Split), Visual
-    // Spoiler). A group's header is the same link in all of them, with a
+    // Above each group of cards in the mainboard, in every view (Text, Text
+    // Compact, Image Grid, Image Grid Compact, Image Stacks, Image Stacks
+    // (Split)). A group's header is the same link in all of them, with a
     // dropdown caret and the group's total quantity ("Lands (35)"); only its
     // container differs (a `li`, a `div.stack-title` or a plain `div`), so this
     // goes before that container. The mainboard is the deck view's first list
@@ -64,20 +63,16 @@ export const injections: Injection[] = [
     component: GroupSummary,
   },
   {
-    // Below the deck list's collapsible sections ("Tokens", "Considering" for
-    // the maybeboard, and "Recent History"), which close the deck list's
-    // column. Each is a toggle (a `div.cursor-pointer` with a bold title)
-    // between `hr`s, and expands below itself. Decks without tokens or a
-    // maybeboard lack those sections, so any of them will do.
+    // The deck list's "Related cards" section, below the boards: a list of
+    // collapsible rows ("Tokens (4) - Expand", "Considering (15) - Expand",
+    // each expanding below itself), whose toggles have test ids. "Considering"
+    // is there even when the maybeboard is empty, so the list always is. This
+    // is another row at its end.
     id: "deck-tags",
     anchor: () =>
-      [...document.querySelectorAll("section.deckview div.cursor-pointer > strong")]
-        .find((title) =>
-          /^(?:Tokens \(\d+\)|Considering \(\d+\)|Recent History)$/.test(
-            title.textContent?.trim() ?? "",
-          ),
-        )
-        ?.closest("section.deckview > div") ?? null,
+      document
+        .querySelector('section.deckview [data-testid^="deck-list-related-cards-"]')
+        ?.closest(".flex-column") ?? null,
     position: "beforeend",
     component: DeckTags,
   },
@@ -101,10 +96,12 @@ export const injections: Injection[] = [
     component: GroupTagMenuItem,
   },
   {
-    // The deck page's fixed bottom bar; goes at the end of its right-hand
-    // group of card type counts.
+    // The deck page's fixed bottom bar, at the end of its row. On wide screens
+    // the bar shows all its views (counts, legality, price, card types); on
+    // narrow ones it shows one at a time, with arrows at the end of the row
+    // to switch, so this goes after those rather than in a view.
     id: "settings",
-    anchor: () => document.getElementById("planeswalkers-count")?.parentElement ?? null,
+    anchor: () => document.querySelector('[data-testid="deck-floating-bar-root"] > .container'),
     position: "beforeend",
     component: Settings,
   },

@@ -15,31 +15,26 @@ const MIN_COPIES = 3;
 // For Scryfall tags the deck's author already has a Moxfield card tag for.
 const MATCHED_BACKGROUND = "hsl(140 60% 42% / 0.35)";
 
-// Mimics Moxfield's own collapsible sections above it ("Tokens", "Recent
-// History"): an `hr`, then a bold title, a dash and an "Expand" link.
+// Mimics the other rows of the deck list's "Related cards" section ("Tokens
+// (4) - Expand"): an icon, the title and count, a dash, then an "Expand" link
+// with a chevron, and the contents below once expanded.
 const styles = {
-  // Moxfield's `hr`, which it recolours from Bootstrap's.
-  divider: {
-    margin: "1rem 0",
-    border: 0,
-    borderTop: "var(--bs-border-width, 1px) solid var(--bs-border-color, #dee2e6)",
-    opacity: 0.4,
-  },
+  // The row's `d-flex align-items-center gap-2`.
+  row: { display: "flex", alignItems: "center", gap: "0.5rem" },
+  // The toggle's `d-inline-flex align-items-center gap-1`, coloured like a link.
   toggle: {
-    display: "block",
-    width: "100%",
-    margin: "1rem 0",
+    display: "inline-flex",
+    alignItems: "center",
+    gap: "0.25rem",
     padding: 0,
     border: 0,
     background: "none",
-    color: "inherit",
+    color: "var(--bs-primary)",
     font: "inherit",
-    textAlign: "left",
     cursor: "pointer",
   },
-  dash: { margin: "0 0.5rem" },
-  action: { color: "var(--bs-primary)" },
-  body: { marginBottom: "1rem" },
+  // The contents' `m-3`.
+  body: { margin: "1rem" },
   list: {
     display: "flex",
     flexWrap: "wrap",
@@ -51,7 +46,8 @@ const styles = {
   count: { marginLeft: "0.35rem", opacity: 0.7 },
   // A pill that's a button rather than a link.
   button: { border: 0, font: "inherit", cursor: "pointer" },
-  note: { margin: 0, opacity: 0.7 },
+  // Moxfield's `.text-nodata`: small, italic and dimmed.
+  note: { margin: 0, fontSize: "0.8em", fontStyle: "italic", opacity: 0.5 },
   status: { margin: "0.5rem 0 0", opacity: 0.7 },
 } satisfies Record<string, CSSProperties>;
 
@@ -111,6 +107,46 @@ function countTags(deck: Deck, oracleTags: Map<string, ScryfallTag[]>): TagCount
       Number(b.matched) - Number(a.matched) ||
       b.copies - a.copies ||
       a.label.localeCompare(b.label),
+  );
+}
+
+/** A tag outline, standing in for the other rows' Font Awesome icons (Lucide's "tag"). */
+function TagIcon() {
+  return (
+    <svg
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      // Font Awesome's box for the other rows' icons: 1.25em wide, 1em high.
+      style={{ width: "1.25em", height: "1em", flexShrink: 0 }}
+    >
+      <path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z" />
+      <circle cx="7.5" cy="7.5" r=".5" fill="currentColor" />
+    </svg>
+  );
+}
+
+/** The toggle's chevron, pointing down to expand and up to collapse. */
+function Chevron({ up }: { up: boolean }) {
+  return (
+    <svg
+      // Cropped to the chevron, which fills the glyph like Font Awesome's.
+      viewBox="4 4 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      // The other rows' `fal small fa-chevron-down`: 0.875em, in a 1.25em-wide box.
+      style={{ fontSize: "0.875em", width: "1.25em", height: "1em" }}
+    >
+      <path d={up ? "m18 15-6-6-6 6" : "m6 9 6 6 6-6"} />
+    </svg>
   );
 }
 
@@ -238,21 +274,23 @@ export function DeckTags({ deckId }: InjectionProps) {
   }
 
   return (
-    <>
-      <hr style={styles.divider} />
-      <button
-        type="button"
-        aria-expanded={expanded}
-        onClick={() => setExpanded(!expanded)}
-        style={styles.toggle}
-      >
-        <strong>Oracle Tags{tags ? ` (${tags.length})` : ""}</strong>
-        <span style={styles.dash}>–</span>
-        <span style={styles.action}>{expanded ? "Collapse" : "Expand"}</span>
-      </button>
+    <div>
+      <div style={styles.row}>
+        <TagIcon />
+        Oracle Tags{tags ? ` (${tags.length})` : ""} -
+        <button
+          type="button"
+          aria-expanded={expanded}
+          onClick={() => setExpanded(!expanded)}
+          style={styles.toggle}
+        >
+          <span>{expanded ? "Collapse" : "Expand"}</span>
+          <Chevron up={expanded} />
+        </button>
+      </div>
       {expanded && <div style={styles.body}>{body}</div>}
       {/* For the tag group menus' "Delete Moxfield Tag", which unmount with the menu. */}
       <DeleteTagDialog deckId={deckId} />
-    </>
+    </div>
   );
 }

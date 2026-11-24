@@ -1,0 +1,122 @@
+import { GROUP_HEADER } from "../src/content/groupMenu";
+import { expect, host, test } from "./fixtures";
+
+// Each test checks that a component is mounted where its injection puts it,
+// relative to Moxfield's own elements, and that it shows something sensible.
+// They run against the live site, so when one fails, Moxfield has most likely
+// changed the part of the page its anchor relies on.
+
+test("group summaries sit above each mainboard group but the commander's", async ({
+  deckPage: page,
+}) => {
+  const summaries = host(page, "group-summary");
+  await expect(summaries.first()).toContainText(/expected in opening 7/);
+  expect(await summaries.count()).toBeGreaterThanOrEqual(3);
+
+  // Each sits right before its group's header container.
+  const headers = await summaries.evaluateAll(
+    (hosts, selector) =>
+      hosts.map((h) => h.nextElementSibling?.querySelector(selector)?.textContent?.trim() ?? null),
+    GROUP_HEADER,
+  );
+  for (const header of headers) {
+    expect(header).toMatch(/^.+\(\d+\)/);
+    expect(header).not.toMatch(/^Commanders?\s*\(/);
+  }
+
+  // The info button opens the draw odds dialog.
+  await summaries
+    .first()
+    .getByRole("button", { name: /^Draw odds for / })
+    .click();
+  const dialog = page.getByRole("dialog");
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator("table").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+});
+
+test("oracle tags are a row at the end of the related cards list", async ({ deckPage: page }) => {
+  const deckTags = host(page, "deck-tags");
+  await expect(deckTags).toHaveCount(1);
+  // The same list as Moxfield's own rows ("Tokens", "Considering"), after them.
+  expect(
+    await deckTags.evaluate(
+      (h) =>
+        h.parentElement?.lastElementChild === h &&
+        h.parentElement.querySelector(
+          '[data-testid="deck-list-related-cards-considering-toggle"]',
+        ) !== null,
+    ),
+  ).toBe(true);
+
+  await expect(deckTags).toContainText(/Oracle Tags \(\d+\) -/);
+  await deckTags.getByRole("button", { name: "Expand" }).click();
+  const pills = deckTags.locator("li");
+  await expect(pills.first()).toBeVisible();
+  // Not signed in, so the deck isn't editable and the pills are Scryfall search links.
+  await expect(pills.first().locator("a")).toHaveAttribute(
+    "href",
+    /^https:\/\/scryfall\.com\/search\?q=otag%3A/,
+  );
+  await deckTags.getByRole("button", { name: "Collapse" }).click();
+  await expect(pills).toHaveCount(0);
+});
+
+test("card tags sit above the details modal's legality section", async ({ deckPage: page }) => {
+  const options = page.locator('[data-testid="deck-view-stack-card-options"]').first();
+  await options.scrollIntoViewIfNeeded();
+  await options.dispatchEvent("click");
+  await page.locator('[data-testid="card-options-view-details"]').click();
+
+  const modal = page.locator(".modal.show");
+  const cardTags = modal.locator('[data-moxite-refinery="card-tags"]');
+  // The heading only renders once the modal's card is found in the deck.
+  await expect(cardTags.locator("h3")).toHaveText("Oracle Tags");
+  await expect(cardTags).not.toContainText("Loading");
+  await expect(cardTags.locator("li, p").first()).toBeVisible();
+  expect(await cardTags.evaluate((h) => h.nextElementSibling?.getAttribute("data-testid"))).toBe(
+    "card-modal-legality",
+  );
+
+  // Next replaces the modal with the next card's, which remounts this for it.
+  const title = modal.locator('[data-testid="card-modal-title"]');
+  const firstCard = await title.textContent();
+  await modal.locator('[data-testid="card-modal-next-card"]').click();
+  await expect(title).not.toHaveText(firstCard ?? "");
+  await expect(modal.locator('[data-moxite-refinery="card-tags"] h3')).toHaveText("Oracle Tags");
+});
+
+test("the group menu gets a component for the group whose header was clicked", async ({
+  deckPage: page,
+}) => {
+  const header = page
+    .locator(GROUP_HEADER)
+    .filter({ hasNotText: /^Commanders?\s*\(/ })
+    .first();
+  await header.scrollIntoViewIfNeeded();
+  await header.click();
+  const menu = page.locator("body > .dropdown-menu.show");
+  await expect(menu).toContainText("Copy Section to Clipboard");
+  // On decks the user can't edit, "Delete Moxfield Tag" renders nothing, but it's mounted.
+  await expect(menu.locator('[data-moxite-refinery="group-menu"]')).toHaveCount(1);
+  await header.click();
+  await expect(menu).toHaveCount(0);
+});
+
+test("the settings gear ends the bottom bar and opens the settings", async ({ deckPage: page }) => {
+  const bar = page.locator('[data-testid="deck-floating-bar-root"]');
+  const gear = bar.getByRole("button", { name: "Moxite Refinery settings" });
+  await expect(gear).toBeVisible();
+
+  await gear.click();
+  const dialog = page.getByRole("dialog", { name: "Moxite Refinery settings" });
+  await expect(dialog).toBeVisible();
+  await expect(dialog).toContainText("Clicking a Scryfall tag opens");
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  // On narrow screens the bar shows one of its views at a time; the gear stays.
+  await page.setViewportSize({ width: 600, height: 900 });
+  await expect(gear).toBeVisible();
+});

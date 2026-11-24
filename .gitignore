@@ -5,3 +5,5 @@ Moxite Refinery.zip
 .DS_Store
 web-ext-artifacts/
 .web-extension-id
+test-results/
+playwright-report/

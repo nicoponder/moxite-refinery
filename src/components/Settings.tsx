@@ -13,8 +13,11 @@ import { Dialog } from "./Dialog";
 import { Segmented } from "./Segmented";
 
 const styles = {
+  // A flex item at the end of the bottom bar's row, whose `gap-3` adds 1rem;
+  // this makes it 1.5rem, the gap between the bar's card type counts.
   button: {
-    marginLeft: "1.5rem",
+    flexShrink: 0,
+    marginLeft: "0.5rem",
     padding: 0,
     border: 0,
     background: "none",

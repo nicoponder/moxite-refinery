@@ -4,8 +4,8 @@ import { deckSearchPath, navigateInApp } from "../content/deck";
 // Translucent fills over inherited text colour, so pills read on both of
 // Moxfield's light and dark themes.
 export const TAG_KINDS = {
-  oracle: { title: "Oracle tags", searchPrefix: "otag", background: "hsl(210 85% 55% / 0.28)" },
-  art: { title: "Art tags", searchPrefix: "atag", background: "hsl(330 75% 58% / 0.28)" },
+  oracle: { title: "Oracle Tags", searchPrefix: "otag", background: "hsl(210 85% 55% / 0.28)" },
+  art: { title: "Art Tags", searchPrefix: "atag", background: "hsl(330 75% 58% / 0.28)" },
 } as const;
 
 /** A tag's pill; add its kind's `background`. */
