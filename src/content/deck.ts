@@ -435,6 +435,50 @@ export async function deleteCardTag(
   return changed;
 }
 
+/**
+ * A card's tags (as `editCardTags()` gives them) with the tag `from` renamed
+ * to `to`, keeping whether it's a deck ("#") or global ("#!") tag and where it
+ * is in the list, or null if the card doesn't have `from`. A card that already
+ * has a tag named `to` (by `tagKey()`) just loses `from`.
+ */
+export function renamedTags(tags: string[], from: string, to: string): string[] | null {
+  if (!tags.some((tag) => tagName(tag) === from)) return null;
+  const hasTo = tags.some((tag) => tagName(tag) !== from && tagKey(tagName(tag)) === tagKey(to));
+  const renamed = tags.flatMap((tag) => {
+    if (tagName(tag) !== from) return [tag];
+    return hasTo ? [] : [(tag.startsWith("#!") ? "#!" : "#") + to];
+  });
+  return [...new Set(renamed)];
+}
+
+/**
+ * Renames the card tag `from` (exactly, deck or global) to `to` on every card
+ * in the deck, keeping their other tags (see `renamedTags()`). Returns how
+ * many entries had it. A global tag is renamed on this deck's cards only. See
+ * `editCardTags()`.
+ */
+export async function renameCardTag(
+  publicId: string,
+  from: string,
+  to: string,
+  authorization: string,
+): Promise<number> {
+  const { changed } = await editCardTags(publicId, authorization, (tags) =>
+    renamedTags(tags, from, to),
+  );
+  return changed;
+}
+
+/**
+ * Why `name` can't be a card tag, or null if it can. Bulk Edit separates a
+ * line's tags by " #", so a name can't have a "#" in it.
+ */
+export function invalidTagName(name: string): string | null {
+  if (!name.trim()) return "Enter a name";
+  if (name.includes("#")) return "Tag names can't contain #";
+  return null;
+}
+
 /** A printing to add to a deck, e.g. from a Scryfall search. */
 export interface NewCard {
   /** The card's name; double-faced cards' "Front // Back" is written as Bulk Edit writes it, "Front / Back". */
@@ -477,6 +521,19 @@ export function withAuthorTag(deck: Deck, cardNames: string[], tagName: string):
     const tags = authorTags[name] ?? [];
     if (!tags.some((tag) => tagKey(tag) === tagKey(tagName))) authorTags[name] = [...tags, tagName];
   }
+  return { ...deck, authorTags };
+}
+
+/** A copy of `deck` whose `authorTags` have the tag `from` renamed to `to`, as `renameCardTag()` leaves it. */
+export function withRenamedAuthorTag(deck: Deck, from: string, to: string): Deck {
+  const authorTags = Object.fromEntries(
+    Object.entries(deck.authorTags ?? {}).map(([card, tags]) => {
+      if (!tags.includes(from)) return [card, tags];
+      const hasTo = tags.some((tag) => tag !== from && tagKey(tag) === tagKey(to));
+      const renamed = tags.flatMap((tag) => (tag !== from ? [tag] : hasTo ? [] : [to]));
+      return [card, [...new Set(renamed)]];
+    }),
+  );
   return { ...deck, authorTags };
 }
 

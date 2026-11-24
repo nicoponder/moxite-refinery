@@ -5,6 +5,7 @@ import {
   rememberDeck,
   withAuthorTag,
   withoutAuthorTag,
+  withRenamedAuthorTag,
   type Deck,
 } from "./content/deck";
 import {
@@ -248,6 +249,11 @@ export function removeAuthorTag(tagName: string): void {
   updateDeck((deck) => withoutAuthorTag(deck, tagName));
 }
 
+/** Records that the current deck's Moxfield card tag `from` is now `to`, after `renameCardTag()`. */
+export function renameAuthorTag(from: string, to: string): void {
+  updateDeck((deck) => withRenamedAuthorTag(deck, from, to));
+}
+
 /** Replaces the current deck, if loaded, with `update`'s copy of it, for later loads too. */
 function updateDeck(update: (deck: Deck) => Deck): void {
   const deckId = store.get(deckIdAtom);
@@ -264,3 +270,9 @@ function updateDeck(update: (deck: Deck) => Deck): void {
  * awaiting confirmation (`DeleteTagDialog`), or null.
  */
 export const tagDeletionAtom = atom<string | null>(null);
+
+/**
+ * The Moxfield card tag the user chose to rename from a tag group's menu,
+ * awaiting its new name (`RenameTagDialog`), or null.
+ */
+export const tagRenameAtom = atom<string | null>(null);

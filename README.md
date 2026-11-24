@@ -15,16 +15,23 @@ Download the [latest signed Firefox extension (.xpi)](https://github.com/nicopon
 
 ## Features
 
-- **Draw odds by card group.** See how many lands to expect in your opening seven, or how likely
-  you are to see a ramp card by a given turn. Use a group's info button for more detail, such as
-  the difference between drawing exactly two lands and drawing at least two.
-- **Scryfall tags in card details.** Open a card's details (its ⋯ menu, then the card's name) to see oracle tags
-  describing what it does. Click a tag to find similar cards on Scryfall, or use Moxfield's
-  add-card search on a deck you can edit. Art tags are available in settings.
-- **Deck-wide tag management.** Expand **Oracle Tags** below the deck list to see tags shared by
-  at least three card copies across your commanders and mainboard. On a deck you can edit, click
-  a suggested tag to apply it to the matching cards, or choose **Delete Moxfield Tag** from a
-  tag group's menu to remove it from the deck.
+- **Draw odds by card group.** Above each group in the deck list, one row shows how many of its
+  cards to expect in your opening seven, and either the first turn you're likely to have seen one
+  or, if that's not by the turn cutoff, the chance of seeing one by then. Hover a figure for what
+  it means. Use the group's info button for more detail, such as the difference between drawing
+  exactly two lands and drawing at least two.
+- **Land cycles in your colors.** The package button at the end of the lands group's row opens a
+  list of land cycles (shocklands, fetchlands, triomes, surveil lands and more), each showing the
+  cards that fit your deck's color identity. On a deck you can edit, add a single land, a whole
+  cycle, or (for fetchlands) just those that can fetch your colors' basic land types.
+- **Scryfall tags in card details.** Open a card's details (its ⋯ menu, then the card's name) to
+  see oracle tags describing what it does. Click a tag to find similar cards on Scryfall, or use
+  Moxfield's add-card search on a deck you can edit. Art tags are available in settings.
+- **Deck-wide tag management.** Expand **Oracle Tags** below the deck list to see the tags common
+  across your commanders and mainboard (on at least four card copies in a 100-card deck, fewer in
+  smaller decks). On a deck you can edit, click a suggested tag to apply it to the matching cards.
+  With the deck grouped by tag, a tag group's menu can **Rename Moxfield Tag** or **Delete Moxfield
+  Tag** across the whole deck in one step.
 - **Adjustable draw estimates.** Use the gear in the deck's bottom bar to set your target
   probability and choose a fixed turn cutoff or one based on the deck's Commander bracket.
 
@@ -32,6 +39,4 @@ To build the extension locally or add a feature, see the [contributing guide](CO
 
 ## TODO
 
-- Easily change name of tags
 - Setting which requires tags in order to add cards
-- Easily add shocks/fetch/surveils/scrylands, and the other major named cycles, in-color

@@ -1,33 +1,12 @@
 import { useAtom, useAtomValue } from "jotai";
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useEffect, useRef, useState } from "react";
 import { deleteCardTag } from "../content/deck";
 import { moxfieldAuthorization, refreshMoxfieldDeck } from "../content/moxfieldPage";
 import { deckAtom, removeAuthorTag, tagDeletionAtom } from "../state";
 import { Dialog } from "./Dialog";
+import { dialogStyles } from "./dialogStyles";
 
-// Bootstrap-style buttons in Moxfield's theme colours, which reach into
-// shadow roots as variables.
-const button: CSSProperties = {
-  padding: "0.375rem 0.75rem",
-  border: "1px solid transparent",
-  borderRadius: "var(--bs-border-radius, 0.375rem)",
-  font: "inherit",
-  cursor: "pointer",
-};
-
-const styles = {
-  text: { margin: 0 },
-  note: { margin: 0, fontSize: "0.85rem", opacity: 0.7 },
-  error: { margin: 0, color: "rgb(var(--bs-danger-rgb, 220, 53, 69))" },
-  actions: { display: "flex", justifyContent: "flex-end", gap: "0.5rem" },
-  cancel: {
-    ...button,
-    borderColor: "var(--bs-border-color, #dee2e6)",
-    background: "none",
-    color: "inherit",
-  },
-  delete: { ...button, background: "var(--bs-danger, #dc3545)", color: "#fff" },
-} satisfies Record<string, CSSProperties>;
+const styles = dialogStyles;
 
 /**
  * Asks to confirm deleting the Moxfield card tag chosen from a tag group's
@@ -99,7 +78,7 @@ export function DeleteTagDialog({ deckId }: { deckId: string }) {
             </button>
             <button
               type="button"
-              style={{ ...styles.delete, cursor: deleting ? "progress" : "pointer" }}
+              style={{ ...styles.danger, cursor: deleting ? "progress" : "pointer" }}
               disabled={deleting}
               onClick={() => void deleteTag(tagName)}
             >

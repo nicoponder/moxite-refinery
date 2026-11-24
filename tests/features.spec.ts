@@ -164,10 +164,57 @@ test("the group menu gets a component for the group whose header was clicked", a
   await header.click();
   const menu = page.locator("body > .dropdown-menu.show");
   await expect(menu).toContainText("Copy Section to Clipboard");
-  // On decks the user can't edit, "Delete Moxfield Tag" renders nothing, but it's mounted.
+  // On decks the user can't edit, "Rename/Delete Moxfield Tag" render nothing, but they're mounted.
   await expect(menu.locator('[data-moxite-refinery="group-menu"]')).toHaveCount(1);
   await header.click();
   await expect(menu).toHaveCount(0);
+});
+
+test("a tag group's menu can rename or delete the tag on decks the user can edit", async ({
+  deckPage: page,
+}) => {
+  // The test deck isn't the test profile's, so pretend it is: the extension
+  // takes the add-card search bar, shown only on the user's own decks, to mean
+  // the deck can be edited. Nothing is saved, as no edit is submitted.
+  await page.evaluate(() => {
+    const input = document.createElement("input");
+    input.dataset.testid = "search-bar-input";
+    input.hidden = true;
+    document.body.append(input);
+  });
+  // A group that's one of the deck's card tags (it's grouped by type and tag).
+  const header = page
+    .locator(GROUP_HEADER)
+    .filter({ hasNotText: /^(Commanders?|Untagged .*|Creatures?|Lands?)\s*\(/ })
+    .first();
+  const tag = /^(.*?)\s*\(\d+\)/.exec((await header.textContent())!.trim())![1];
+  await header.scrollIntoViewIfNeeded();
+  await header.click();
+  const menu = page.locator("body > .dropdown-menu.show");
+  // After Moxfield's own items.
+  await expect(menu.getByRole("button")).toHaveText([
+    "Copy Section to Clipboard",
+    "Buy All",
+    "Rename Moxfield Tag",
+    "Delete Moxfield Tag",
+  ]);
+
+  await menu.getByRole("button", { name: "Rename Moxfield Tag" }).click();
+  await expect(menu).toHaveCount(0);
+  const dialog = page.getByRole("dialog", { name: "Rename Moxfield tag" });
+  await expect(dialog).toBeVisible();
+  const input = dialog.getByRole("textbox");
+  await expect(input).toHaveValue(tag);
+  await expect(input).toBeFocused();
+  const rename = dialog.getByRole("button", { name: "Rename" });
+  await expect(rename).toBeDisabled();
+  await input.fill("a #b");
+  await expect(dialog).toContainText("Tag names can't contain #");
+  await expect(rename).toBeDisabled();
+  await input.fill(`${tag} renamed`);
+  await expect(rename).toBeEnabled();
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  await expect(dialog).toBeHidden();
 });
 
 test("the settings gear ends the bottom bar and opens the settings", async ({ deckPage: page }) => {

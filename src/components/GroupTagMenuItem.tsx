@@ -3,12 +3,13 @@ import type { CSSProperties } from "react";
 import { canSearchDeck } from "../content/deck";
 import { closeGroupMenu } from "../content/groupMenu";
 import type { InjectionProps } from "../content/injector";
-import { deckAtom, tagDeletionAtom } from "../state";
+import { deckAtom, tagDeletionAtom, tagRenameAtom } from "../state";
 
-// Bootstrap's `.dropdown-divider` and `.dropdown-item.text-danger`, which look
-// the same in both of Moxfield's themes; its other items are recoloured by
-// `.darkmode` rules that can't reach a shadow root. The padding variables are
-// set on the menu, and inherited.
+// Bootstrap's `.dropdown-divider`, `.dropdown-item` and
+// `.dropdown-item.text-danger`. The padding variables are set on the menu, and
+// inherited. The danger item looks the same in both of Moxfield's themes, but
+// its other items are recoloured by `.darkmode` rules that can't reach a
+// shadow root, so the rename item copies those.
 const styles = {
   divider: {
     height: 0,
@@ -30,20 +31,29 @@ const styles = {
 } satisfies Record<string, CSSProperties>;
 
 // Hover and focus colours can only be set from a stylesheet.
-const stylesheet = `
-  button { color: rgb(var(--bs-danger-rgb, 220, 53, 69)); background: none; }
-  button:hover, button:focus-visible { color: #fff; background: var(--bs-danger, #dc3545); outline: none; }
+const stylesheet = (dark: boolean) => `
+  button { background: none; }
+  .rename { color: ${dark ? "#fff" : "var(--bs-dropdown-link-color, #212529)"}; }
+  .rename:hover, .rename:focus-visible {
+    color: ${dark ? "#bbb" : "var(--bs-dropdown-link-hover-color, #1e2125)"};
+    background: ${dark ? "#222" : "var(--bs-dropdown-link-hover-bg, #e9ecef)"};
+    outline: none;
+  }
+  .delete { color: rgb(var(--bs-danger-rgb, 220, 53, 69)); }
+  .delete:hover, .delete:focus-visible { color: #fff; background: var(--bs-danger, #dc3545); outline: none; }
 `;
 
 /**
- * "Delete Moxfield Tag" at the end of a card group's menu, for groups that are
- * one of the deck's Moxfield card tags, on decks the user can edit. It asks
- * for confirmation first (`DeleteTagDialog`, rendered by `DeckTags`, since this
- * unmounts with the menu).
+ * "Rename Moxfield Tag" and "Delete Moxfield Tag" at the end of a card group's
+ * menu, for groups that are one of the deck's Moxfield card tags, on decks the
+ * user can edit. They open `RenameTagDialog` (for the new name) and
+ * `DeleteTagDialog` (to confirm), which `DeckTags` renders, since this
+ * unmounts with the menu.
  */
 export function GroupTagMenuItem({ target: groupName }: InjectionProps) {
   const deckState = useAtomValue(deckAtom);
   const setTagDeletion = useSetAtom(tagDeletionAtom);
+  const setTagRename = useSetAtom(tagRenameAtom);
   if (deckState.status !== "loaded" || !groupName || !canSearchDeck()) return null;
   const isTag = Object.values(deckState.value.authorTags ?? {}).some((tags) =>
     tags.includes(groupName),
@@ -52,10 +62,22 @@ export function GroupTagMenuItem({ target: groupName }: InjectionProps) {
 
   return (
     <>
-      <style>{stylesheet}</style>
+      <style>{stylesheet(document.body.classList.contains("darkmode"))}</style>
       <div role="separator" style={styles.divider} />
       <button
         type="button"
+        className="rename"
+        style={styles.item}
+        onClick={() => {
+          closeGroupMenu();
+          setTagRename(groupName);
+        }}
+      >
+        Rename Moxfield Tag
+      </button>
+      <button
+        type="button"
+        className="delete"
         style={styles.item}
         onClick={() => {
           closeGroupMenu();
