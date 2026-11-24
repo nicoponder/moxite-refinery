@@ -1,0 +1,10 @@
+{
+  "summary": {
+    "en-US": "Adds deck-building checks and extra functionality to Moxfield."
+  },
+  "categories": ["games-entertainment"],
+  "version": {
+    "license": "MIT",
+    "compatibility": ["firefox", "android"]
+  }
+}
