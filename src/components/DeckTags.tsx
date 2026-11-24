@@ -10,8 +10,12 @@ import { searchLink, TAG_KINDS, tagPillStyle } from "./tagLinks";
 
 // The boards a deck is played with; the maybeboard, sideboard and tokens aren't counted.
 const BOARDS = ["commanders", "mainboard"];
-// Tags on fewer copies than this are left out, as too rare to say much about the deck.
-const MIN_COPIES = 3;
+// Tags on fewer copies than this are left out, as too rare to say much about the
+// deck: the natural log of the deck's size (in `BOARDS`), rounded down, at least 1.
+// That's 4 for a 100-card Commander deck and 3 for 21 to 54 cards.
+function minCopies(deckSize: number): number {
+  return Math.max(1, Math.floor(Math.log(deckSize)));
+}
 // For Scryfall tags the deck's author already has a Moxfield card tag for.
 const MATCHED_BACKGROUND = "hsl(140 60% 42% / 0.35)";
 
@@ -67,7 +71,7 @@ interface TagCount {
 }
 
 /**
- * The oracle tags on at least `MIN_COPIES` of the deck's cards: those matching
+ * The oracle tags on at least `minCopies()` of the deck's cards: those matching
  * one of the author's Moxfield card tags first, then most copies first.
  */
 function countTags(deck: Deck, oracleTags: Map<string, ScryfallTag[]>): TagCount[] {
@@ -77,8 +81,10 @@ function countTags(deck: Deck, oracleTags: Map<string, ScryfallTag[]>): TagCount
       .map(tagKey),
   );
   const counts = new Map<string, TagCount>();
+  let deckSize = 0;
   for (const board of BOARDS) {
     for (const { quantity, card } of Object.values(deck.boards[board]?.cards ?? {})) {
+      deckSize += quantity;
       for (const tag of oracleTags.get(card.scryfall_id) ?? []) {
         let count = counts.get(tag.slug);
         if (!count) {
@@ -100,7 +106,7 @@ function countTags(deck: Deck, oracleTags: Map<string, ScryfallTag[]>): TagCount
       }
     }
   }
-  const common = [...counts.values()].filter((count) => count.copies >= MIN_COPIES);
+  const common = [...counts.values()].filter((count) => count.copies >= minCopies(deckSize));
   for (const count of common) count.cards.sort((a, b) => a.localeCompare(b));
   return common.sort(
     (a, b) =>
