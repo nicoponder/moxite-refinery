@@ -22,14 +22,41 @@ Reload the extension (and the Moxfield tab) after each rebuild.
 
 ## Build from source (for add-on reviewers)
 
-With Node.js 20 or later (built with 26) on macOS or Linux:
+With Node.js 24 (the version used for AMO releases), npm, and `zip` on macOS or Linux:
 
 ```sh
-npm install
+npm ci
 npm run build   # writes the extension to dist/
 ```
 
-## Sign for Firefox
+## Publish on Firefox Add-ons (AMO)
+
+1. In the [AMO Developer Hub](https://addons.mozilla.org/developers/), confirm that
+   `moxite-refinery@nicoponder` in `public/manifest.json` matches your add-on if it already
+   exists. Review the listing summary, category, and MIT license in `amo-metadata.json`.
+2. [Get AMO API credentials](https://addons.mozilla.org/developers/addon/api/key/) from the
+   account that manages the listing. In GitHub **Settings → Environments → amo**, add secrets
+   `AMO_JWT_ISSUER` (API key) and `AMO_JWT_SECRET` (API secret).
+3. Set `version` in `public/manifest.json` to a version higher than any you've already
+   submitted, including for unlisted signing. Commit and push the changes. Then tag that
+   commit and push just that tag:
+
+   ```sh
+   tag="v$(node -p "require('./public/manifest.json').version")"
+   git tag "$tag"
+   git push origin "$tag"
+   ```
+
+The workflow checks the tag against the built manifest and submits the validated extension
+and matching source to AMO's **listed** channel. Check the Developer Hub for review status;
+once published, [AMO delivers updates automatically](https://extensionworkshop.com/documentation/manage/updating-your-extension/).
+
+**Mobile:** The same package targets Firefox for Android 142+ (`gecko_android` in the
+manifest and `android` in the listing metadata). Before tagging, test a deck on a phone or
+emulator using [Mozilla's Android testing instructions](https://extensionworkshop.com/documentation/develop/developing-extensions-for-firefox-for-android/).
+Firefox on iPhone and iPad cannot install AMO extensions.
+
+## Sign for Firefox (unlisted)
 
 Put addons.mozilla.org API credentials (Tools → Manage API Keys) in `.env`:
 

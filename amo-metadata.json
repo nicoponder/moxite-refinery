@@ -1,0 +1,10 @@
+{
+  "summary": {
+    "en-US": "Adds Scryfall tags and draw probabilities to Moxfield deck pages."
+  },
+  "categories": ["games-entertainment"],
+  "version": {
+    "license": "MIT",
+    "compatibility": ["firefox", "android"]
+  }
+}

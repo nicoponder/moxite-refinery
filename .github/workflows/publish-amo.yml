@@ -1,0 +1,70 @@
+name: Publish to Firefox Add-ons
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  MOZILLA_CLI_VERSION: "10.8.0"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run check
+      - run: npm run build
+      - name: Validate the Firefox extension
+        run: npx --yes "web-ext@$MOZILLA_CLI_VERSION" lint --source-dir dist
+      - name: Verify release tag
+        if: github.ref_type == 'tag'
+        run: |
+          expected="v$(jq -er .version dist/manifest.json)"
+          if [[ "$GITHUB_REF_NAME" != "$expected" ]]; then
+            echo "::error::Expected tag $expected for the built manifest, got $GITHUB_REF_NAME"
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: extension
+          path: Moxite Refinery.zip
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    environment: amo
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - uses: actions/download-artifact@v4
+        with:
+          name: extension
+      - name: Prepare the validated extension and matching reviewer source
+        run: |
+          unzip -q 'Moxite Refinery.zip' -d dist
+          git archive --format=zip --output="$RUNNER_TEMP/source.zip" HEAD
+      - name: Submit listed version to AMO
+        env:
+          WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
+          WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+        run: |
+          : "${WEB_EXT_API_KEY:?Set AMO_JWT_ISSUER in GitHub Actions secrets}"
+          : "${WEB_EXT_API_SECRET:?Set AMO_JWT_SECRET in GitHub Actions secrets}"
+          npx --yes "web-ext@$MOZILLA_CLI_VERSION" sign --source-dir dist \
+            --channel listed --amo-metadata amo-metadata.json \
+            --upload-source-code "$RUNNER_TEMP/source.zip" --approval-timeout 0

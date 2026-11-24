@@ -4,3 +4,4 @@ Moxite Refinery.zip
 .env
 .DS_Store
 web-ext-artifacts/
+.web-extension-id
