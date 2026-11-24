@@ -31,6 +31,7 @@ Download the [latest signed Firefox extension (.xpi)](https://github.com/nicopon
 To build the extension locally or add a feature, see the [contributing guide](CONTRIBUTING.md).
 
 ## TODO
-* Easily change name of tags
-* Setting which requires tags in order to add cards
-* Easily add shocks/fetch/surveils/scrylands, and the other major named cycles, in-color
+
+- Easily change name of tags
+- Setting which requires tags in order to add cards
+- Easily add shocks/fetch/surveils/scrylands, and the other major named cycles, in-color

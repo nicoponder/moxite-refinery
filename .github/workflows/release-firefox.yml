@@ -1,4 +1,4 @@
-name: Publish to Firefox Add-ons
+name: Release Firefox extension on GitHub
 
 on:
   pull_request:
@@ -26,8 +26,8 @@ jobs:
       - run: npm run check
       - run: npm run build
       - name: Validate the Firefox extension
-        run: npx --yes "web-ext@$MOZILLA_CLI_VERSION" lint --source-dir dist
-      - name: Verify release tag
+        run: npx --yes "web-ext@$MOZILLA_CLI_VERSION" lint --source-dir dist --self-hosted
+      - name: Verify release tag and update URL
         if: github.ref_type == 'tag'
         run: |
           expected="v$(jq -er .version dist/manifest.json)"
@@ -35,13 +35,15 @@ jobs:
             echo "::error::Expected tag $expected for the built manifest, got $GITHUB_REF_NAME"
             exit 1
           fi
+          feed="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/latest/download/updates.json"
+          jq -e --arg feed "$feed" '.browser_specific_settings.gecko.update_url == $feed' dist/manifest.json
       - uses: actions/upload-artifact@v4
         with:
           name: extension
           path: Moxite Refinery.zip
           if-no-files-found: error
 
-  publish:
+  sign:
     needs: build
     if: github.event_name == 'push' && github.ref_type == 'tag'
     runs-on: ubuntu-latest
@@ -58,7 +60,7 @@ jobs:
         run: |
           unzip -q 'Moxite Refinery.zip' -d dist
           git archive --format=zip --output="$RUNNER_TEMP/source.zip" HEAD
-      - name: Submit listed version to AMO
+      - name: Sign for self-distribution and download the signed XPI
         env:
           WEB_EXT_API_KEY: ${{ secrets.AMO_JWT_ISSUER }}
           WEB_EXT_API_SECRET: ${{ secrets.AMO_JWT_SECRET }}
@@ -66,5 +68,33 @@ jobs:
           : "${WEB_EXT_API_KEY:?Set AMO_JWT_ISSUER in GitHub Actions secrets}"
           : "${WEB_EXT_API_SECRET:?Set AMO_JWT_SECRET in GitHub Actions secrets}"
           npx --yes "web-ext@$MOZILLA_CLI_VERSION" sign --source-dir dist \
-            --channel listed --amo-metadata amo-metadata.json \
-            --upload-source-code "$RUNNER_TEMP/source.zip" --approval-timeout 0
+            --channel unlisted --artifacts-dir signed --approval-timeout 3600000 \
+            --upload-source-code "$RUNNER_TEMP/source.zip"
+      - name: Prepare release assets
+        run: |
+          mkdir release
+          mv signed/*.xpi release/moxite-refinery.xpi
+          bash scripts/firefox-update-manifest.sh "$GITHUB_REF_NAME" release/moxite-refinery.xpi > release/updates.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: signed-firefox-release
+          path: release/
+          if-no-files-found: error
+
+  publish:
+    needs: sign
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: signed-firefox-release
+          path: release
+      - name: Publish signed XPI and update manifest together
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" --verify-tag \
+            --title "Moxite Refinery $GITHUB_REF_NAME" --generate-notes \
+            release/moxite-refinery.xpi release/updates.json
