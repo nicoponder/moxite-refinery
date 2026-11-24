@@ -44,18 +44,52 @@ function render(root: Root, injection: Injection, deckId: string, target: string
   );
 }
 
-/** Whether `host` is still where `position` put it relative to `anchor`. */
-function inPlace(host: Element, anchor: Element, position: InsertPosition): boolean {
+/**
+ * Where `position` puts an element relative to `anchor`: the node next to that
+ * spot, and the direction away from it. Injections sharing a spot sit in a run
+ * there, those listed later nearer to it, as `insertAdjacentElement` leaves them.
+ */
+function spot(
+  anchor: Element,
+  position: InsertPosition,
+): { first: Node | null; away: "previousSibling" | "nextSibling" } {
   switch (position) {
     case "beforebegin":
-      return anchor.previousSibling === host;
+      return { first: anchor.previousSibling, away: "previousSibling" };
     case "afterbegin":
-      return anchor.firstChild === host;
+      return { first: anchor.firstChild, away: "nextSibling" };
     case "beforeend":
-      return anchor.lastChild === host;
+      return { first: anchor.lastChild, away: "previousSibling" };
     case "afterend":
-      return anchor.nextSibling === host;
+      return { first: anchor.nextSibling, away: "nextSibling" };
   }
+}
+
+/**
+ * Puts `host` (of the injection at `index` in the list) where `position` puts
+ * it relative to `anchor`, unless it's already there: past only the hosts of
+ * injections listed after it. `order` maps injection ids to their indices.
+ */
+function place(
+  host: Element,
+  anchor: Element,
+  position: InsertPosition,
+  index: number,
+  order: Map<string, number>,
+) {
+  const { first, away } = spot(anchor, position);
+  let node = first;
+  let last: Element | null = null;
+  while (node !== host && node instanceof Element) {
+    const other = order.get(node.getAttribute("data-moxite-refinery") ?? "");
+    if (other === undefined || other <= index) break;
+    last = node;
+    node = node[away];
+  }
+  if (node === host) return;
+  if (!last) anchor.insertAdjacentElement(position, host);
+  else if (away === "previousSibling") last.before(host);
+  else last.after(host);
 }
 
 interface Mounted {
@@ -76,6 +110,7 @@ export function startInjector(injections: Injection[]): void {
   const mounted = new Map<string, Map<Element, Mounted>>(
     injections.map((injection) => [injection.id, new Map()]),
   );
+  const order = new Map(injections.map((injection, index) => [injection.id, index]));
   let currentDeckId: string | null = null;
 
   function unmount(entries: Map<Element, Mounted>, anchor: Element) {
@@ -98,7 +133,7 @@ export function startInjector(injections: Injection[]): void {
     const container = document.createElement("div");
     container.style.display = "contents";
     host.attachShadow({ mode: "open" }).appendChild(container);
-    anchor.insertAdjacentElement(injection.position, host);
+    place(host, anchor, injection.position, order.get(injection.id)!, order);
 
     const root = createRoot(container);
     render(root, injection, deckId, target);
@@ -138,9 +173,7 @@ export function startInjector(injections: Injection[]): void {
         // Moxfield inserts its own elements without regard for ours, e.g.
         // appending a section's content when it expands, which can leave a
         // component on the wrong side of it.
-        if (!inPlace(current.host, anchor, injection.position)) {
-          anchor.insertAdjacentElement(injection.position, current.host);
-        }
+        place(current.host, anchor, injection.position, order.get(injection.id)!, order);
         if (deckChanged || target !== current.target) {
           current.target = target;
           render(current.root, injection, deckId, target);

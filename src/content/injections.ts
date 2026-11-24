@@ -6,6 +6,18 @@ import { Settings } from "../components/Settings";
 import { GROUP_HEADER, groupHeaderTitle, openGroupMenuHeader } from "./groupMenu";
 import type { Injection } from "./injector";
 
+/**
+ * The mainboard's group headers, in any view. The mainboard is the deck view's
+ * first list of groups; later ones are other boards, such as "Considering"
+ * (the maybeboard) once expanded.
+ */
+function mainboardGroupHeaders(): Element[] {
+  const mainboard = [...document.querySelectorAll("section.deckview > div > *")].find((list) =>
+    list.querySelector(GROUP_HEADER),
+  );
+  return mainboard ? [...mainboard.querySelectorAll(GROUP_HEADER)] : [];
+}
+
 // Add new components here. Moxfield's class names are partly hashed build
 // output (e.g. `div.p1MgompCDAeWEqmrjXoI`), so anchor on its `data-testid`
 // attributes, ids, tags and Bootstrap classes instead.
@@ -35,21 +47,15 @@ export const injections: Injection[] = [
     // (Split)). A group's header is the same link in all of them, with a
     // dropdown caret and the group's total quantity ("Lands (35)"); only its
     // container differs (a `li`, a `div.stack-title` or a plain `div`), so this
-    // goes before that container. The mainboard is the deck view's first list
-    // of groups; later ones are other boards, such as "Considering" (the
-    // maybeboard) once expanded. The commander group ("Commander (1)", or
+    // goes before that container. Above the lands group, its row ends with
+    // `LandsTools`' button. The commander group ("Commander (1)", or
     // "Commanders (2)" with partners) is skipped: commanders start in the
     // command zone, so they're never drawn.
     id: "group-summary",
-    anchor: () => {
-      const mainboard = [...document.querySelectorAll("section.deckview > div > *")].find((list) =>
-        list.querySelector(GROUP_HEADER),
-      );
-      if (!mainboard) return null;
-      return [...mainboard.querySelectorAll(GROUP_HEADER)]
+    anchor: () =>
+      mainboardGroupHeaders()
         .filter((header) => !/^Commanders?\s*\(\d+\)/.test(header.textContent?.trim() ?? ""))
-        .map((header) => header.parentElement!);
-    },
+        .map((header) => header.parentElement!),
     position: "beforebegin",
     // The group's name and total quantity, as "Lands (35)". The header's text
     // runs them together ("Lands(35)") in some views.

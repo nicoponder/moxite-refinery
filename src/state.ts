@@ -1,6 +1,7 @@
 import { atom, createStore, type PrimitiveAtom } from "jotai";
 import {
   fetchDeck,
+  forgetDeck,
   rememberDeck,
   withAuthorTag,
   withoutAuthorTag,
@@ -142,14 +143,17 @@ export const artTagsAtom = atom<Loadable<Map<string, ScryfallTag[]>>>({ status: 
 
 /**
  * Runs `load` into `target`, discarding the result if the user has moved to
- * another deck by the time it settles.
+ * another deck by the time it settles. With `keepCurrent`, a loaded value
+ * stays until the new one replaces it, rather than going back to loading.
  */
 async function loadInto<T>(
   target: PrimitiveAtom<Loadable<T>>,
   deckId: string,
   load: () => Promise<T>,
+  keepCurrent = false,
 ): Promise<T | undefined> {
-  store.set(target, { status: "loading" });
+  if (!keepCurrent || store.get(target).status !== "loaded")
+    store.set(target, { status: "loading" });
   try {
     const value = await load();
     if (store.get(deckIdAtom) === deckId) store.set(target, { status: "loaded", value });
@@ -193,15 +197,42 @@ export function setDeckId(deckId: string | null): void {
       store.set(artTagsAtom, { status: "error", error });
       return;
     }
-    const scryfallIds = Object.values(deck.boards).flatMap((board) =>
-      Object.values(board?.cards ?? {}).map((entry) => entry.card.scryfall_id),
-    );
-    // One id lookup feeds both tag kinds, which then load in parallel.
-    const ids = fetchTaggableIds(scryfallIds);
-    taggableIds = { deckId, ids };
-    void loadInto(oracleTagsAtom, deckId, () => ids.then((cards) => fetchTags("oracle", cards)));
-    loadArtTags();
+    loadTags(deckId, deck);
   });
+}
+
+/** Loads the Scryfall tags of `deck`'s cards, keeping those shown until they're replaced if `keepCurrent`. */
+function loadTags(deckId: string, deck: Deck, keepCurrent = false): void {
+  const scryfallIds = Object.values(deck.boards).flatMap((board) =>
+    Object.values(board?.cards ?? {}).map((entry) => entry.card.scryfall_id),
+  );
+  // One id lookup feeds both tag kinds, which then load in parallel.
+  const ids = fetchTaggableIds(scryfallIds);
+  taggableIds = { deckId, ids };
+  void loadInto(
+    oracleTagsAtom,
+    deckId,
+    () => ids.then((cards) => fetchTags("oracle", cards)),
+    keepCurrent,
+  );
+  if (keepCurrent && store.get(artTagsAtom).status === "loaded") {
+    void loadInto(artTagsAtom, deckId, () => ids.then((cards) => fetchTags("art", cards)), true);
+  } else {
+    loadArtTags();
+  }
+}
+
+/**
+ * Refetches the current deck, and its cards' tags, after it was changed
+ * behind Moxfield's back (e.g. by `addCards()`). What's shown stays until the
+ * new copies replace it.
+ */
+export async function reloadDeck(): Promise<void> {
+  const deckId = store.get(deckIdAtom);
+  if (!deckId) return;
+  forgetDeck(deckId);
+  const deck = await loadInto(deckAtom, deckId, () => fetchDeck(deckId), true);
+  if (deck && store.get(deckIdAtom) === deckId) loadTags(deckId, deck, true);
 }
 
 /**

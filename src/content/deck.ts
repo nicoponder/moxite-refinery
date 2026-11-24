@@ -1,3 +1,5 @@
+import { moxfieldAuthorization } from "./moxfieldPage";
+
 const DECK_PATH = /^\/decks\/([A-Za-z0-9_-]+)\/?$/;
 
 // Listing pages that share the /decks/ prefix with actual decks.
@@ -14,7 +16,7 @@ export function getDeckId(pathname: string = location.pathname): string | null {
  * Moxfield only shows on decks the user can edit.
  */
 export function canSearchDeck(): boolean {
-  return document.getElementById("deckbox-search") !== null;
+  return document.querySelector('[data-testid="search-bar-input"]') !== null;
 }
 
 /**
@@ -92,6 +94,8 @@ export interface Deck {
   authorTags?: Record<string, string[]>;
   /** Sent back as `X-Deck-Version` with edits. */
   version?: number;
+  /** The colours of the deck's cards' identities, as "W", "U", "B", "R", "G"; empty if colourless. */
+  colorIdentity?: string[];
 }
 
 // The first turn someone at the table can be expected to win, per Commander bracket.
@@ -116,21 +120,55 @@ export function bracketWinTurn(deck: Deck): { bracket: number | null; turn: numb
 
 const deckRequests = new Map<string, Promise<Deck>>();
 
+// How long to wait for Moxfield to restore its sign-in on page load.
+const AUTH_WAIT_MS = 5000;
+const AUTH_POLL_MS = 250;
+
+/** The signed-in user's `Authorization` header once Moxfield has one, or null if it doesn't within `AUTH_WAIT_MS`. */
+async function awaitMoxfieldAuthorization(): Promise<string | null> {
+  const deadline = Date.now() + AUTH_WAIT_MS;
+  for (;;) {
+    const authorization = await moxfieldAuthorization();
+    if (authorization || Date.now() >= deadline) return authorization;
+    await new Promise((resolve) => setTimeout(resolve, AUTH_POLL_MS));
+  }
+}
+
+async function getDeck(deckId: string): Promise<Deck> {
+  const get = (authorization: string | null) =>
+    fetch(DECK_API + encodeURIComponent(deckId), {
+      headers: authorization ? { Authorization: authorization } : {},
+    });
+  const authorization = await moxfieldAuthorization();
+  let res = await get(authorization);
+  // Private decks 404 without their owner's sign-in, which Moxfield may not
+  // have restored yet when the page has only just loaded.
+  if (res.status === 404 && !authorization) {
+    const restored = await awaitMoxfieldAuthorization();
+    if (restored) res = await get(restored);
+  }
+  if (!res.ok) throw new Error(`Moxfield deck ${deckId}: HTTP ${res.status}`);
+  return res.json() as Promise<Deck>;
+}
+
 /**
- * Fetches a deck by the id in its URL. Concurrent and repeat calls for the same
- * deck share one request; a failed request is forgotten so it can be retried.
+ * Fetches a deck by the id in its URL, with the user's Moxfield sign-in if
+ * they're signed in, as private decks need. Concurrent and repeat calls for the
+ * same deck share one request; a failed request is forgotten so it can be retried.
  */
 export function fetchDeck(deckId: string): Promise<Deck> {
   let request = deckRequests.get(deckId);
   if (!request) {
-    request = fetch(DECK_API + encodeURIComponent(deckId)).then((res) => {
-      if (!res.ok) throw new Error(`Moxfield deck ${deckId}: HTTP ${res.status}`);
-      return res.json() as Promise<Deck>;
-    });
+    request = getDeck(deckId);
     request.catch(() => deckRequests.delete(deckId));
     deckRequests.set(deckId, request);
   }
   return request;
+}
+
+/** Has the next `fetchDeck` for `deckId` fetch it again, e.g. after cards were added to it. */
+export function forgetDeck(deckId: string): void {
+  deckRequests.delete(deckId);
 }
 
 /** Replaces the deck `fetchDeck` returns for `deckId`, e.g. with a copy updated after an edit. */
@@ -174,6 +212,76 @@ interface BulkEdit {
 // back changes nothing but what was edited.
 const BULK_EDIT_OPTIONS = { allowMultiplePrintings: true, ignoreFlavorNames: false };
 
+// Each edit reads the deck and writes the whole of it back, so edits run one
+// at a time, each from the deck as the previous one left it.
+let editQueue: Promise<unknown> = Promise.resolve();
+
+/** Runs `edit` once the edits before it have finished, whether or not they succeeded. */
+function serialized<T>(edit: () => Promise<T>): Promise<T> {
+  const result = editQueue.then(edit);
+  editQueue = result.catch(() => undefined);
+  return result;
+}
+
+/** The deck `publicId` as its owner sees it, and as Bulk Edit text. */
+async function getBulkEdit(
+  publicId: string,
+  authorization: string,
+): Promise<{ deck: Deck; bulkEdit: BulkEdit }> {
+  const id = encodeURIComponent(publicId);
+  const options = new URLSearchParams(
+    Object.entries(BULK_EDIT_OPTIONS).map(([k, v]) => [k, String(v)]),
+  );
+  const [deck, bulkEdit] = await Promise.all([
+    moxfieldJson<Deck>(`/v3/decks/all/${id}`, authorization),
+    moxfieldJson<BulkEdit>(`/v2/decks/${id}/bulk-edit?${options}`, authorization),
+  ]);
+  return { deck, bulkEdit };
+}
+
+/** The headers Moxfield's own edits send. */
+function editHeaders(deck: Deck): Record<string, string> {
+  return {
+    "Content-Type": "application/json",
+    "X-Public-Deck-ID": deck.publicId,
+    "X-Deck-Version": String(deck.version ?? 0),
+  };
+}
+
+/** Saves `boards`, an edited copy of `bulkEdit.boards`, as Moxfield's own Bulk Edit saves. */
+async function putBulkEdit(
+  deck: Deck,
+  bulkEdit: BulkEdit,
+  boards: Record<string, string>,
+  authorization: string,
+): Promise<void> {
+  const result = await moxfieldJson<{ isSuccessful?: boolean }>(
+    `/v3/decks/${encodeURIComponent(deck.publicId)}/bulk-edit`,
+    authorization,
+    {
+      method: "PUT",
+      headers: editHeaders(deck),
+      body: JSON.stringify({
+        boards,
+        pricingProvider: bulkEdit.pricingProvider,
+        usePrefPrintings: true,
+        ...BULK_EDIT_OPTIONS,
+      }),
+    },
+  );
+  if (!result.isSuccessful) throw new Error("Moxfield didn't accept the bulk edit");
+}
+
+// Lines are found by printing, "(SET) 123" after the name, since the name
+// they're written under isn't always `card.name`: printings with a flavor
+// name use it ("Swift Wind, Steed of She-Ra" for Emiel the Blessed).
+const printing = (set: string, cn: string) => `${set.toUpperCase()} ${cn}`;
+const LINE = /^(\d+)x? (.+?) \(([A-Za-z0-9]+)\) (\S+)/;
+function linePrinting(line: string): string | null {
+  const match = LINE.exec(line);
+  return match ? printing(match[3], match[4]) : null;
+}
+
 /** A bulk edit line split into the entry and its tags ("#tag", or "#!tag" for global ones). */
 function splitLine(line: string): { entry: string; tags: string[] } {
   const start = line.indexOf(" #");
@@ -212,37 +320,27 @@ interface OwnerTag {
  * cards' tags again, so have it refetch the deck afterwards
  * (`refreshMoxfieldDeck()`).
  */
-async function editCardTags(
+function editCardTags(
+  publicId: string,
+  authorization: string,
+  edit: (tags: string[]) => string[] | null,
+  cardNames?: string[],
+): Promise<{ changed: number; missing: string[] }> {
+  return serialized(() => editCardTagsNow(publicId, authorization, edit, cardNames));
+}
+
+async function editCardTagsNow(
   publicId: string,
   authorization: string,
   edit: (tags: string[]) => string[] | null,
   cardNames?: string[],
 ): Promise<{ changed: number; missing: string[] }> {
   const id = encodeURIComponent(publicId);
-  const [deck, bulkEdit] = await Promise.all([
-    moxfieldJson<Deck>(`/v3/decks/all/${id}`, authorization),
-    moxfieldJson<BulkEdit>(
-      `/v2/decks/${id}/bulk-edit?${new URLSearchParams(Object.entries(BULK_EDIT_OPTIONS).map(([k, v]) => [k, String(v)]))}`,
-      authorization,
-    ),
-  ]);
+  const { deck, bulkEdit } = await getBulkEdit(publicId, authorization);
   const wanted = (name: string) => !cardNames || cardNames.includes(name);
-  const editHeaders = {
-    "Content-Type": "application/json",
-    "X-Public-Deck-ID": publicId,
-    "X-Deck-Version": String(deck.version ?? 0),
-  };
   let changed = 0;
   const found = new Set<string>();
 
-  // Lines are found by printing, "(SET) 123" after the name, since the name
-  // they're written under isn't always `card.name`: printings with a flavor
-  // name use it ("Swift Wind, Steed of She-Ra" for Emiel the Blessed).
-  const printing = (set: string, cn: string) => `${set.toUpperCase()} ${cn}`;
-  const linePrinting = (line: string) => {
-    const match = /^\d+x? .+? \(([A-Za-z0-9]+)\) (\S+)/.exec(line);
-    return match ? printing(match[1], match[2]) : null;
-  };
   const printings = new Map(
     Object.entries(deck.boards)
       .filter(([board]) => board !== "commanders")
@@ -269,24 +367,7 @@ async function editCardTags(
         .join("\n"),
     ]),
   );
-  if (changed) {
-    const result = await moxfieldJson<{ isSuccessful?: boolean }>(
-      `/v3/decks/${id}/bulk-edit`,
-      authorization,
-      {
-        method: "PUT",
-        headers: editHeaders,
-        // As Moxfield's own Bulk Edit saves.
-        body: JSON.stringify({
-          boards,
-          pricingProvider: bulkEdit.pricingProvider,
-          usePrefPrintings: true,
-          ...BULK_EDIT_OPTIONS,
-        }),
-      },
-    );
-    if (!result.isSuccessful) throw new Error("Moxfield didn't accept the bulk edit");
-  }
+  if (changed) await putBulkEdit(deck, bulkEdit, boards, authorization);
 
   // Bulk Edit leaves the commanders out, so they're edited one by one. Each
   // request sends the card's whole list of tags, as Moxfield's own tag editor
@@ -309,7 +390,7 @@ async function editCardTags(
       await moxfieldJson<unknown>(
         `/v2/decks/${encodeURIComponent(deck.id)}/cards/${encodeURIComponent(card.id)}/tags`,
         authorization,
-        { method: "PUT", headers: editHeaders, body: JSON.stringify({ tags: edited }) },
+        { method: "PUT", headers: editHeaders(deck), body: JSON.stringify({ tags: edited }) },
       );
       changed++;
     }
@@ -352,6 +433,41 @@ export async function deleteCardTag(
     return kept.length < tags.length ? kept : null;
   });
   return changed;
+}
+
+/** A printing to add to a deck, e.g. from a Scryfall search. */
+export interface NewCard {
+  /** The card's name; double-faced cards' "Front // Back" is written as Bulk Edit writes it, "Front / Back". */
+  name: string;
+  set: string;
+  /** Collector number. */
+  cn: string;
+}
+
+/**
+ * Adds a copy of each card to the mainboard of the deck `publicId`, which the
+ * signed-in user must be able to edit, through Bulk Edit: a line already there
+ * for the same printing gets its quantity raised, and others get a new line.
+ *
+ * Like `editCardTags()`, this edits the deck behind Moxfield's back, so have
+ * it refetch the deck afterwards (`refreshMoxfieldDeck()`).
+ */
+export function addCards(publicId: string, cards: NewCard[], authorization: string): Promise<void> {
+  return serialized(async () => {
+    const { deck, bulkEdit } = await getBulkEdit(publicId, authorization);
+    const lines = (bulkEdit.boards.mainboard ?? "").split("\n").filter((line) => line.trim());
+    for (const card of cards) {
+      const wanted = printing(card.set, card.cn);
+      const index = lines.findIndex((line) => linePrinting(line) === wanted);
+      if (index >= 0) {
+        lines[index] = lines[index].replace(/^(\d+)/, (quantity) => String(Number(quantity) + 1));
+      } else {
+        lines.push(`1 ${card.name.replace(" // ", " / ")} (${card.set.toUpperCase()}) ${card.cn}`);
+      }
+    }
+    const boards = { ...bulkEdit.boards, mainboard: lines.join("\n") };
+    await putBulkEdit(deck, bulkEdit, boards, authorization);
+  });
 }
 
 /** A copy of `deck` whose `authorTags` give the named cards the tag `tagName`, as `tagCards()` does. */

@@ -10,8 +10,23 @@ test("group summaries sit above each mainboard group but the commander's", async
   deckPage: page,
 }) => {
   const summaries = host(page, "group-summary");
-  await expect(summaries.first()).toContainText(/expected in opening 7/);
+  // Each figure is followed by an icon, with what it means in a tooltip on hover.
+  const figures = summaries.first().locator("[aria-describedby]");
+  await figures.first().hover();
+  await expect(summaries.first().getByRole("tooltip").first()).toBeVisible();
+  await expect(summaries.first().getByRole("tooltip").first()).toHaveText(
+    /^\d+\.\d\d expected in opening 7$/,
+  );
   expect(await summaries.count()).toBeGreaterThanOrEqual(3);
+
+  // The figures and the info button sit in one row (the info modal repeats the figures).
+  const tops = await figures.evaluateAll((spans) =>
+    spans
+      .filter((span) => !span.closest("dialog"))
+      .map((span) => Math.round(span.getBoundingClientRect().top)),
+  );
+  expect(tops).toHaveLength(3);
+  for (const top of tops) expect(Math.abs(top - tops[0])).toBeLessThanOrEqual(4);
 
   // Each sits right before its group's header container.
   const headers = await summaries.evaluateAll(
@@ -32,6 +47,57 @@ test("group summaries sit above each mainboard group but the commander's", async
   const dialog = page.getByRole("dialog");
   await expect(dialog).toBeVisible();
   await expect(dialog.locator("table").first()).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+});
+
+test("the lands button ends the lands group's summary row and opens a modal", async ({
+  deckPage: page,
+}) => {
+  // Only in the summary above the "Lands (n)" header ("Untagged Lands (n)" on
+  // the test deck, which is grouped by tag).
+  const summaries = host(page, "group-summary");
+  const lands = summaries.filter({ has: page.getByRole("button", { name: "Lands", exact: true }) });
+  await expect(lands).toHaveCount(1);
+  expect(
+    await lands.evaluate(
+      (h, selector) => h.nextElementSibling?.querySelector(selector)?.textContent?.trim(),
+      GROUP_HEADER,
+    ),
+  ).toMatch(/^(Untagged )?Lands?\s*\(\d+\)/);
+  // In the same row as the info button.
+  const [info, open] = await Promise.all(
+    [/^Draw odds for /, "Lands"].map((name) =>
+      lands.getByRole("button", { name, exact: true }).first().boundingBox(),
+    ),
+  );
+  expect(Math.abs(info!.y + info!.height / 2 - (open!.y + open!.height / 2))).toBeLessThanOrEqual(
+    2,
+  );
+
+  await lands.getByRole("button", { name: "Lands", exact: true }).click();
+  const dialog = page.getByRole("dialog", { name: "Lands" });
+  await expect(dialog).toBeVisible();
+  // A section per land cycle tag, each with the cards Scryfall finds for it.
+  const painlands = dialog.getByRole("region", { name: "Pain Land" });
+  await expect(painlands.getByRole("heading")).toHaveText(/^Pain Land\s*\(\d+\)$/, {
+    timeout: 15_000,
+  });
+  // Collapsed at first, so none of its cards (or their images) are there yet.
+  await expect(painlands.locator("li")).toHaveCount(0);
+  const toggle = painlands.getByRole("button", { name: /^Pain Land/ });
+  await expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await toggle.click();
+  await expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await expect(painlands.locator("li img").first()).toBeVisible();
+  // Five cards to a row.
+  const tops = await painlands
+    .locator("li")
+    .evaluateAll((cards) => cards.slice(0, 6).map((card) => card.getBoundingClientRect().top));
+  expect(new Set(tops.slice(0, 5)).size).toBe(1);
+  expect(tops[5]).toBeGreaterThan(tops[0]);
+  // Not signed in, so the deck isn't editable and there's nothing to add with.
+  await expect(dialog.getByRole("button", { name: /^Add/ })).toHaveCount(0);
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 });

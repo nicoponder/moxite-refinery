@@ -1,5 +1,5 @@
 // Scryfall's API and bulk files allow cross-origin requests. Its guidelines ask
-// for an Accept header and at most ~10 requests per second.
+// for an Accept header and to keep within its rate limits (below).
 const API = "https://api.scryfall.com";
 const COLLECTION_BATCH = 75; // /cards/collection's per-request limit
 
@@ -47,13 +47,90 @@ interface TagRecord {
   taggings: { oracle_id?: string; illustration_id?: string }[];
 }
 
-async function scryfallJson<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(API + path, {
+// Scryfall's rate limits: card searches and collection lookups 2 a second,
+// its other endpoints about 10. A 429 locks the client out for 30 seconds, so
+// requests start at least this far apart, per kind.
+const CARD_QUERY_INTERVAL_MS = 500;
+const REQUEST_INTERVAL_MS = 100;
+const CARD_QUERY = /^(?:https:\/\/api\.scryfall\.com)?\/cards\/(?:search|collection)\b/;
+const nextRequestAt = { cardQuery: 0, other: 0 };
+
+/** Waits for the next free slot to send a request to `pathOrUrl`. */
+async function throttle(pathOrUrl: string): Promise<void> {
+  const [kind, interval] = CARD_QUERY.test(pathOrUrl)
+    ? (["cardQuery", CARD_QUERY_INTERVAL_MS] as const)
+    : (["other", REQUEST_INTERVAL_MS] as const);
+  const now = Date.now();
+  const at = Math.max(now, nextRequestAt[kind]);
+  nextRequestAt[kind] = at + interval;
+  if (at > now) await new Promise((resolve) => setTimeout(resolve, at - now));
+}
+
+/** A request to Scryfall's API, by path or (for a search's next page) full URL. */
+async function scryfallFetch(pathOrUrl: string, init?: RequestInit): Promise<Response> {
+  await throttle(pathOrUrl);
+  return fetch(pathOrUrl.startsWith("https:") ? pathOrUrl : API + pathOrUrl, {
     ...init,
     headers: { Accept: "application/json", ...init?.headers },
   });
+}
+
+async function scryfallJson<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await scryfallFetch(path, init);
   if (!res.ok) throw new Error(`Scryfall ${path}: HTTP ${res.status}`);
   return res.json() as Promise<T>;
+}
+
+/** A card from a Scryfall search. */
+export interface SearchCard {
+  /** Scryfall's id. */
+  id: string;
+  /** "Front // Back" for multi-face cards. */
+  name: string;
+  set: string;
+  /** Collector number. */
+  cn: string;
+  /** The card's (front face's) image, 488 × 680. */
+  image: string | null;
+}
+
+interface SearchPage {
+  data: (ScryfallCard & {
+    name: string;
+    set: string;
+    collector_number: string;
+    image_uris?: { normal?: string };
+    card_faces?: (ScryfallFace & { image_uris?: { normal?: string } })[];
+  })[];
+  has_more: boolean;
+  next_page?: string;
+}
+
+/**
+ * Every card matching a Scryfall search `query` (one printing of each, as
+ * Scryfall picks by default), by name, across all of its pages.
+ */
+export async function searchCards(query: string): Promise<SearchCard[]> {
+  const cards: SearchCard[] = [];
+  let url: string | undefined = `/cards/search?${new URLSearchParams({ q: query, order: "name" })}`;
+  while (url) {
+    const res = await scryfallFetch(url);
+    // A search with no results is a 404.
+    if (res.status === 404) break;
+    if (!res.ok) throw new Error(`Scryfall search ${query}: HTTP ${res.status}`);
+    const page = (await res.json()) as SearchPage;
+    for (const card of page.data) {
+      cards.push({
+        id: card.id,
+        name: card.name,
+        set: card.set,
+        cn: card.collector_number,
+        image: card.image_uris?.normal ?? card.card_faces?.[0]?.image_uris?.normal ?? null,
+      });
+    }
+    url = page.has_more ? page.next_page : undefined;
+  }
+  return cards;
 }
 
 /** A card's id for `field`, or each face's when the card doesn't have one itself. */
