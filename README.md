@@ -37,15 +37,14 @@ npm run build   # writes the extension to dist/
 2. [Get AMO API credentials](https://addons.mozilla.org/developers/addon/api/key/) from the
    account that manages the listing. In GitHub **Settings → Environments → amo**, add secrets
    `AMO_JWT_ISSUER` (API key) and `AMO_JWT_SECRET` (API secret).
-3. Set `version` in `public/manifest.json` to a version higher than any you've already
-   submitted, including for unlisted signing. Commit and push the changes. Then tag that
-   commit and push just that tag:
+3. Bump the version above any you've already submitted, including for unlisted signing:
 
    ```sh
-   tag="v$(node -p "require('./public/manifest.json').version")"
-   git tag "$tag"
-   git push origin "$tag"
+   npm run bump -- patch   # or minor / major
    ```
+
+   Commit the changes to `package.json`, `package-lock.json`, and `public/manifest.json`.
+   Then run the `git tag … && git push origin …` command printed by the script.
 
 The workflow checks the tag against the built manifest and submits the validated extension
 and matching source to AMO's **listed** channel. Check the Developer Hub for review status;
@@ -65,7 +64,7 @@ JWT_ISSUER=user:12345:678
 JWT_SECRET=...
 ```
 
-Then bump `version` in `public/manifest.json`, commit, and run `npm run sign`. It
+Then run `npm run bump -- patch` (or `minor` / `major`), commit, and run `npm run sign`. It
 builds, uploads `dist/` with this repository's source for an unlisted signature,
 and saves the signed `.xpi` in `web-ext-artifacts/`.
 

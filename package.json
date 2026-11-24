@@ -1,6 +1,6 @@
 {
   "name": "moxite-refinery",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "scripts": {
@@ -12,6 +12,7 @@
     "format": "oxfmt",
     "format:check": "oxfmt --check",
     "check": "tsc --noEmit && oxlint && oxfmt --check",
+    "bump": "node scripts/bump-version.mjs",
     "sign": "sh scripts/sign.sh"
   },
   "dependencies": {
