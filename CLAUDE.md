@@ -14,10 +14,13 @@ npm run typecheck  # tsc only
 npm run lint       # oxlint (.oxlintrc.json)
 npm run format     # oxfmt, rewriting files in place (.oxfmtrc.json)
 npm run check      # typecheck + lint + format check
+npm run bump -- patch  # bump patch/minor/major and print the GitHub release tag command
 npm run sign       # build, then sign on addons.mozilla.org as unlisted (scripts/sign.sh)
 ```
 
 `npm run sign` reads `JWT_ISSUER` and `JWT_SECRET` (AMO API credentials) from `.env`, which is gitignored, and passes them to `web-ext` as `WEB_EXT_API_KEY`/`WEB_EXT_API_SECRET` so they stay out of the process list. Because `content.js` is minified, it also uploads the source as `git archive` of `HEAD`, so it refuses to run with uncommitted changes. The signed `.xpi` goes to `web-ext-artifacts/` (gitignored). AMO won't sign the same `version` twice, so bump it in `public/manifest.json` before each signing. It uploads to Mozilla, so don't run it unasked.
+
+Version tags trigger `.github/workflows/release-firefox.yml`: AMO signs for self-distribution, then GitHub Releases hosts the signed XPI and `updates.json`. Keep `browser_specific_settings.gecko.update_url` pointed at the stable latest-release asset.
 
 There is no test suite; `npm run check` (types, lint, formatting) and `npm run build` are the checks. oxlint runs its `correctness` rules plus the React plugin; oxfmt uses its Prettier-compatible defaults (100 columns, double quotes) and also formats the Markdown and JSON files. To try a change, load `dist/` as an unpacked extension (Chrome: `chrome://extensions` → Load unpacked; Firefox: `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → `dist/manifest.json`), then reload the extension and the Moxfield tab after each rebuild.
 
@@ -62,7 +65,7 @@ The types in `deck.ts` cover only the fields in use; the real payload is much la
 - `permissions` has only `storage` (for settings), which shows no install warning.
 - `host_permissions` lists every cross-origin host the content script fetches from (`api2.moxfield.com`, `api.scryfall.com`, `data.scryfall.io`) because Firefox content scripts need them; add new hosts there. Firefox grants MV3 host permissions at install from 127, but the floor is higher still (next point).
 - `browser_specific_settings.gecko.data_collection_permissions` is `{ "required": ["none"] }`: addons.mozilla.org requires new extensions to declare what data they collect, and this one sends none to its developer. Firefox supports the key from 140 and Firefox for Android from 142, so those are the `strict_min_version`s (`gecko` and `gecko_android`); lower ones make `web-ext lint` warn.
-- `web-ext lint` (`npx web-ext lint --source-dir dist`) still warns twice about `innerHTML` in `content.js`: React DOM's implementation of `dangerouslySetInnerHTML`, which this code never uses. Don't add uses of it.
+- `web-ext lint` (`npx web-ext lint --source-dir dist --self-hosted`) still warns twice about `innerHTML` in `content.js`: React DOM's implementation of `dangerouslySetInnerHTML`, which this code never uses. Don't add uses of it.
 - Check any new manifest key, permission or extension API against both browsers and the Firefox 140 (Android 142) floor.
 - Content scripts run in an isolated world: wrapping `fetch`/`XMLHttpRequest` there won't see Moxfield's own requests (which use XHR), and its store isn't reachable, hence `public/main-world.js` in `"world": "MAIN"` (Chrome 111, Firefox 128). Vite's IIFE library mode takes one entry, so that script is plain JS in `public/`, copied verbatim.
 

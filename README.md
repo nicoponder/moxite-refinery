@@ -1,79 +1,36 @@
 # Moxite Refinery
 
-A Manifest V3 web extension that renders React components on Moxfield deck pages
-(`https://moxfield.com/decks/<deckId>`).
+A Firefox/Chrome extension that provides statistics and deckbuilding tools on Moxfield decks.
 
-## Develop
+## Install in Firefox
 
-```sh
-npm install
-npm run dev     # rebuilds dist/ on change
-npm run build   # typecheck + production build
-npm run check   # typecheck + oxlint + oxfmt --check
-npm run format  # format with oxfmt
-```
+Download the [latest signed Firefox extension (.xpi)](https://github.com/nicoponder/moxite-refinery/releases/latest/download/moxite-refinery.xpi).
 
-Load `dist/` as an unpacked extension:
+- **Desktop (140+):** If Firefox downloads the file instead of offering to install it, open
+  `about:addons` → gear menu → **Install Add-on From File** and select the `.xpi`.
+- **Android (142+):** Download the same `.xpi`. In Firefox, go to **Settings → About Firefox**,
+  tap the Firefox logo five times, then return to **Settings → Install Extension from File**.
+  [Mozilla's installation guide](https://extensionworkshop.com/documentation/publish/install-self-distributed/)
+  has screenshots. Firefox on iOS does not support these extensions.
 
-- **Chrome/Edge:** `chrome://extensions` → Developer mode → Load unpacked → `dist/`
-- **Firefox:** `about:debugging#/runtime/this-firefox` → Load Temporary Add-on → `dist/manifest.json`
+## Features
 
-Reload the extension (and the Moxfield tab) after each rebuild.
+- **Draw odds by card group.** See how many lands to expect in your opening seven, or how likely
+  you are to see a ramp card by a given turn. Use a group's info button for more detail, such as
+  the difference between drawing exactly two lands and drawing at least two.
+- **Scryfall tags in card details.** Open a card's **View Details** panel to see oracle tags
+  describing what it does. Click a tag to find similar cards on Scryfall, or use Moxfield's
+  add-card search on a deck you can edit. Art tags are available in settings.
+- **Deck-wide tag management.** Expand **Oracle Tags** below the deck list to see tags shared by
+  at least three card copies across your commanders and mainboard. On a deck you can edit, click
+  a suggested tag to apply it to the matching cards, or choose **Delete Moxfield Tag** from a
+  tag group's menu to remove it from the deck.
+- **Adjustable draw estimates.** Use the gear in the deck's bottom bar to set your target
+  probability and choose a fixed turn cutoff or one based on the deck's Commander bracket.
 
-## Build from source (for add-on reviewers)
+To build the extension locally or add a feature, see the [contributing guide](CONTRIBUTING.md).
 
-With Node.js 24 (the version used for AMO releases), npm, and `zip` on macOS or Linux:
-
-```sh
-npm ci
-npm run build   # writes the extension to dist/
-```
-
-## Publish on Firefox Add-ons (AMO)
-
-1. In the [AMO Developer Hub](https://addons.mozilla.org/developers/), confirm that
-   `moxite-refinery@nicoponder` in `public/manifest.json` matches your add-on if it already
-   exists. Review the listing summary, category, and MIT license in `amo-metadata.json`.
-2. [Get AMO API credentials](https://addons.mozilla.org/developers/addon/api/key/) from the
-   account that manages the listing. In GitHub **Settings → Environments → amo**, add secrets
-   `AMO_JWT_ISSUER` (API key) and `AMO_JWT_SECRET` (API secret).
-3. Bump the version above any you've already submitted, including for unlisted signing:
-
-   ```sh
-   npm run bump -- patch   # or minor / major
-   ```
-
-   Commit the changes to `package.json`, `package-lock.json`, and `public/manifest.json`.
-   Then run the `git tag … && git push origin …` command printed by the script.
-
-The workflow checks the tag against the built manifest and submits the validated extension
-and matching source to AMO's **listed** channel. Check the Developer Hub for review status;
-once published, [AMO delivers updates automatically](https://extensionworkshop.com/documentation/manage/updating-your-extension/).
-
-**Mobile:** The same package targets Firefox for Android 142+ (`gecko_android` in the
-manifest and `android` in the listing metadata). Before tagging, test a deck on a phone or
-emulator using [Mozilla's Android testing instructions](https://extensionworkshop.com/documentation/develop/developing-extensions-for-firefox-for-android/).
-Firefox on iPhone and iPad cannot install AMO extensions.
-
-## Sign for Firefox (unlisted)
-
-Put addons.mozilla.org API credentials (Tools → Manage API Keys) in `.env`:
-
-```sh
-JWT_ISSUER=user:12345:678
-JWT_SECRET=...
-```
-
-Then run `npm run bump -- patch` (or `minor` / `major`), commit, and run `npm run sign`. It
-builds, uploads `dist/` with this repository's source for an unlisted signature,
-and saves the signed `.xpi` in `web-ext-artifacts/`.
-
-## Adding a component
-
-1. Create it in `src/components/`. It receives `{ deckId }` as props.
-2. Register it in `src/content/injections.ts` with an `anchor` (a function returning
-   the element to insert next to) and a `position` (`beforebegin`, `afterbegin`,
-   `beforeend` or `afterend`).
-
-The injector (`src/content/injector.tsx`) mounts each component in its own shadow root
-and keeps it mounted as Moxfield's single-page app re-renders or navigates between decks.
+## TODO
+* Easily change name of tags
+* Setting which requires tags in order to add cards
+* Easily add shocks/fetch/surveils/scrylands, and the other major named cycles, in-color

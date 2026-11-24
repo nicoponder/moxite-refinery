@@ -25,5 +25,5 @@ const next = packageVersion();
 writeFileSync(manifestFile, manifest.replace(/("version"\s*:\s*)"[^"]*"/, `$1"${next}"`));
 
 console.log(`Version bumped: ${current} → ${next}`);
-console.log("Commit the version changes, then run this to trigger the AMO publish:");
+console.log("Commit the version changes, then run this to publish the Firefox release on GitHub:");
 console.log(`git tag v${next} && git push origin v${next}`);
