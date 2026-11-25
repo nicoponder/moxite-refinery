@@ -1,29 +1,57 @@
 import { useAtomValue } from "jotai";
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { addCards, canSearchDeck, type Deck } from "../content/deck";
+import { addCards, canSearchDeck, searchMoxfieldCards, type Deck } from "../content/deck";
 import type { InjectionProps } from "../content/injector";
 import { moxfieldAuthorization, refreshMoxfieldDeck } from "../content/moxfieldPage";
-import { searchCards, type SearchCard } from "../content/scryfall";
+import { fetchTags, searchCards } from "../content/scryfall";
 import { deckAtom, reloadDeck, type Loadable } from "../state";
 import { Dialog } from "./Dialog";
 import { Tooltip } from "./Tooltip";
 
-/** A section of the modal: the cards a Scryfall search finds, by default for an oracle tag. */
+/** A card in the modal: Moxfield's printing of it, failing that Scryfall's. */
+interface LandCard {
+  /** Its printing's id, Moxfield's or Scryfall's. */
+  id: string;
+  /** "Front // Back" for multi-face cards. */
+  name: string;
+  set: string;
+  /** Collector number. */
+  cn: string;
+  image: string | null;
+  /** Its colour identity, as upper-case letters ("W", "U", …). */
+  colorIdentity: string[];
+  /** Its rules text, its faces' joined by newlines for multi-face cards. */
+  oracleText: string;
+}
+
+/**
+ * A section of the modal: the cards with an oracle tag (or a descendant of it,
+ * as Scryfall's `otag:` finds them), by default the one it's keyed by.
+ */
 interface LandSection {
-  /** The tag's slug, searched with `otag:` unless `search` says otherwise. Also the section's key. */
+  /** Its key, and the oracle tag of its cards unless `tags` says otherwise. */
   tag: string;
   /** The section's title; by default the tag's, in title case ("cycle-bondland" → "Bondland"). */
   title?: string;
-  /** The Scryfall search for its cards, instead of `otag:<tag>`. */
-  search?: string;
+  /** The oracle tags its cards have one of, instead of `tag`. */
+  tags?: string[];
+  /** Whether it has only modal double-faced cards, as Scryfall's `is:mdfc` finds. */
+  mdfc?: boolean;
+  /** The toggles at the top of the modal that show or hide it. */
+  filters?: LandFilter[];
   /** Whether its header has an "Add all" button (by default it does). */
   addAll?: boolean;
+  /** The fewest colours a deck can have for the section to be in its modal (by default any). */
+  minColors?: number;
   /**
-   * Another button in its header, adding only those of its cards that the
-   * search `search(identity)` also finds (`identity` as `identityQuery()`
-   * gives it), or none if that's null.
+   * Another button in its header, adding only those of its cards that
+   * `filter` accepts for the deck's colour identity (as `identityQuery()` gives it).
    */
-  addSome?: { label: string; doneLabel: string; search: (identity: string) => string | null };
+  addSome?: {
+    label: string;
+    doneLabel: string;
+    filter: (card: LandCard, identity: string) => boolean;
+  };
 }
 
 // The basic land type of each colour, as named in a card's rules text.
@@ -35,53 +63,179 @@ const BASIC_LAND_TYPES: Record<string, string> = {
   g: "forest",
 };
 
-// Scryfall oracle tags for kinds of lands: a few popular ones first, then the
+/**
+ * The toggles at the top of the modal, each showing or hiding the sections
+ * that list it in their `filters` (all shown at first). "Conditional Tapped"
+ * lands can enter tapped or untapped; "Searchable" ones have basic land types,
+ * so fetchlands and other searches for a land type find them; "Utility" ones
+ * do something besides make mana (fetch, channel or cycle).
+ */
+const LAND_FILTERS = [
+  "MDFC",
+  "Dual",
+  "Mono",
+  "Tapped",
+  "Conditional Tapped",
+  "Utility",
+  "Searchable",
+] as const;
+type LandFilter = (typeof LAND_FILTERS)[number];
+
+// Kinds of lands by Scryfall oracle tag: a few popular ones first, then the
 // tags matching /cycle.*land/ that are the parents of those on the cards of the
 // "dual lands" package deck (moxfield.com/decks/uLzPvfBv6kOnttQ0svTAuw) as of
 // 2026-11-24, which none of its cards has itself, but for the broadest two
-// (`cycle-land`, `cycle-dual-land`).
+// (`cycle-land`, `cycle-dual-land`). Where Scryfall has an `is:` for a kind
+// (`is:shockland`, `is:fetchland`, `is:bounceland`), its tags find the same cards.
 const LAND_SECTIONS: LandSection[] = [
-  { tag: "shockland", title: "Shock Land", search: "is:shockland" },
+  {
+    tag: "shockland",
+    title: "Shock Land",
+    tags: ["cycle-rav-shockland"],
+    filters: ["Conditional Tapped", "Searchable"],
+  },
   {
     tag: "fetchland",
     title: "Fetch Land",
-    search: "is:fetchland",
+    tags: ["cycle-ons-fetchland", "cycle-zen-fetchland"],
+    filters: ["Utility"],
     // The fetchlands that can fetch a land type of the deck's colours.
     addSome: {
       label: "Add all in-color",
       doneLabel: "All in-color added",
-      search: (identity) => {
-        const types = identity
-          .split("")
-          .flatMap((color) => (BASIC_LAND_TYPES[color] ? [`o:${BASIC_LAND_TYPES[color]}`] : []));
-        return types.length ? `is:fetchland (${types.join(" OR ")})` : null;
-      },
+      filter: (card, identity) =>
+        identity.split("").some((color) => {
+          const type = BASIC_LAND_TYPES[color];
+          return type !== undefined && card.oracleText.toLowerCase().includes(type);
+        }),
     },
   },
-  { tag: "triome" },
-  { tag: "painland", title: "Pain Land" },
+  { tag: "triome", filters: ["Searchable"], minColors: 3 },
+  { tag: "cycle-painland", filters: ["Dual"] },
   // Nearly every deck could play these, so there's no adding them all at once.
   { tag: "rainbow-land", addAll: false },
-  { tag: "cycle-abu-dual-land", title: "True Dual Lands" },
-  { tag: "cycle-block-ths-scry-land", title: "Scry Land" },
-  { tag: "cycle-dual-surveil-land", title: "Surveil Land" },
-  { tag: "cycle-bondland" },
-  { tag: "cycle-checkland" },
-  { tag: "cycle-cycling-land" },
-  { tag: "cycle-dual-creatureland" },
-  { tag: "cycle-dual-tapland" },
-  { tag: "cycle-fastland" },
-  { tag: "cycle-fra-walkerland" },
-  { tag: "cycle-hybrid-filterland" },
-  { tag: "cycle-lrw-typal-land" },
-  { tag: "cycle-napland" },
-  { tag: "cycle-ody-filterland" },
-  { tag: "cycle-painland" },
-  { tag: "cycle-restless-land" },
-  { tag: "cycle-reveal-land" },
-  { tag: "cycle-slowland" },
-  { tag: "cycle-zendikar-creatureland" },
+  { tag: "cycle-abu-dual-land", title: "True Dual Lands", filters: ["Dual", "Searchable"] },
+  { tag: "cycle-block-ths-scry-land", title: "Scry Land", filters: ["Dual", "Tapped"] },
+  { tag: "cycle-dual-surveil-land", title: "Surveil Land", filters: ["Tapped", "Searchable"] },
+  { tag: "cycle-horizon-land", title: "Horizon Land", filters: ["Dual"] },
+  { tag: "bounceland", title: "Bounce Land", filters: ["Tapped"] },
+  { tag: "cycle-neo-legendary-land", title: "Channel Land", filters: ["Utility"] },
+  { tag: "cycle-pathway", title: "MDFC Pathway Land", filters: ["MDFC"] },
+  {
+    tag: "mdfc-boltland",
+    title: "MDFC Bolt Land",
+    tags: ["boltland"],
+    mdfc: true,
+    filters: ["MDFC"],
+  },
+  {
+    tag: "cycle-mh3-mdfc-dual-land",
+    title: "MDFC Dual Tapland",
+    filters: ["MDFC", "Dual", "Tapped"],
+  },
+  {
+    tag: "mdfc-mono-land",
+    title: "MDFC Mono Tapland",
+    tags: ["cycle-mono-land"],
+    mdfc: true,
+    filters: ["MDFC", "Mono", "Tapped"],
+  },
+  { tag: "cycle-khm-snow-tapland", title: "Snow Tapland", filters: ["Tapped", "Searchable"] },
+  { tag: "cycle-bondland", filters: ["Dual", "Conditional Tapped"] },
+  { tag: "cycle-checkland", filters: ["Dual", "Conditional Tapped"] },
+  // Both of Scryfall's cycles of dual cycling lands (Amonkhet's, a child tag, and the enemy-colour one).
+  {
+    tag: "cycle-dual-cycling-land",
+    title: "Dual Cycling Land",
+    filters: ["Dual", "Tapped", "Utility"],
+  },
+  {
+    tag: "cycle-ons-m-cycling-land",
+    title: "Mono Cycling Land",
+    filters: ["Mono", "Tapped", "Utility"],
+  },
+  { tag: "cycle-dual-creatureland", title: "Creature Land", filters: ["Dual", "Tapped"] },
+  { tag: "cycle-dual-tapland", filters: ["Dual", "Tapped"] },
+  { tag: "cycle-fastland", filters: ["Dual", "Conditional Tapped"] },
+  { tag: "cycle-fra-walkerland", title: "Walkerland", filters: ["Dual", "Conditional Tapped"] },
+  { tag: "cycle-hybrid-filterland", filters: ["Dual"] },
+  { tag: "cycle-lrw-typal-land", title: "Typal Land", filters: ["Dual", "Conditional Tapped"] },
+  { tag: "cycle-napland", filters: ["Dual"] },
+  { tag: "cycle-ody-filterland", filters: ["Dual"] },
+  { tag: "cycle-restless-land", filters: ["Dual", "Conditional Tapped"] },
+  { tag: "cycle-reveal-land", filters: ["Dual", "Conditional Tapped"] },
+  { tag: "cycle-slowland", filters: ["Dual", "Conditional Tapped"] },
 ];
+
+const sectionTags = (section: LandSection): string[] => section.tags ?? [section.tag];
+
+// One search finds every section's cards, of all colours, so that it's the
+// same search (and cached once) for every deck; `loadLands()` sorts them into
+// sections. It has only `otag:` terms: with an `is:` (`is:mdfc`), Scryfall
+// would also find the extras it leaves out by default (funny cards, tokens and
+// digital ones).
+const LANDS_QUERY = [...new Set(LAND_SECTIONS.flatMap(sectionTags))]
+  .map((tag) => `otag:${tag}`)
+  .join(" OR ");
+
+/**
+ * Searches Scryfall for every section's cards, and sorts them into sections
+ * (by key) by their oracle tags, from Tagger's bulk file. Each card is shown
+ * in the printing Moxfield's own search picks, with Moxfield's image, or if
+ * Moxfield doesn't find it, Scryfall's.
+ */
+async function sortLands(): Promise<Map<string, LandCard[]>> {
+  const [found, printings] = await Promise.all([
+    searchCards(LANDS_QUERY),
+    searchMoxfieldCards(LANDS_QUERY).catch((error: unknown) => {
+      console.error("[moxite-refinery]", error);
+      return [];
+    }),
+  ]);
+  const tags = await fetchTags(
+    "oracle",
+    new Map(found.map((card) => [card.id, { oracleIds: card.oracleIds, illustrationIds: [] }])),
+  );
+  const moxfield = new Map(printings.map((card) => [card.name, card]));
+  const cards = found.map((card) => {
+    const printing = moxfield.get(card.name);
+    const land: LandCard = {
+      id: printing?.id ?? card.id,
+      name: card.name,
+      set: printing?.set ?? card.set,
+      cn: printing?.cn ?? card.cn,
+      image: printing?.image ?? card.image,
+      colorIdentity: card.colorIdentity,
+      oracleText: card.oracleText,
+    };
+    return { land, layout: card.layout, tags: new Set(tags.get(card.id)?.map((tag) => tag.slug)) };
+  });
+  return new Map(
+    LAND_SECTIONS.map((section) => [
+      section.tag,
+      cards.flatMap(({ land, layout, tags }) =>
+        (!section.mdfc || layout === "modal_dfc") &&
+        sectionTags(section).some((tag) => tags.has(tag))
+          ? [land]
+          : [],
+      ),
+    ]),
+  );
+}
+
+let landsRequest: Promise<Map<string, LandCard[]>> | null = null;
+
+/** `sortLands()`, once per page (but again after a failure). */
+function loadLands(): Promise<Map<string, LandCard[]>> {
+  if (!landsRequest) {
+    const request = sortLands();
+    request.catch(() => {
+      if (landsRequest === request) landsRequest = null;
+    });
+    landsRequest = request;
+  }
+  return landsRequest;
+}
 
 /**
  * A section's title: its own, or its tag's slug with spaces for hyphens, in
@@ -95,6 +249,29 @@ function sectionTitle({ tag, title }: LandSection): string {
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
       .join(" ");
   return full.replace(/^Cycle\s+/i, "");
+}
+
+/** How many colours the colour identity `identity` (`identityQuery()`) has. */
+function colorCount(identity: string): number {
+  return identity === "c" ? 0 : identity.length;
+}
+
+/**
+ * The filters turned off at first for a deck of the colour identity
+ * `identity`: "Dual" for a deck of one colour or none, and "Mono" too for a
+ * colourless one, whose cards it can't play.
+ */
+function defaultHidden(identity: string | null): ReadonlySet<LandFilter> {
+  const colors = identity === null ? 5 : colorCount(identity);
+  return new Set<LandFilter>([
+    ...(colors <= 1 ? (["Dual"] as const) : []),
+    ...(colors === 0 ? (["Mono"] as const) : []),
+  ]);
+}
+
+/** Whether `section` is shown, with the filters in `hidden` turned off: none of its own may be. */
+function isShown(section: LandSection, hidden: ReadonlySet<LandFilter>): boolean {
+  return !section.filters?.some((filter) => hidden.has(filter));
 }
 
 // The modal is as wide as five cards in a row, whatever its sections hold, or
@@ -142,6 +319,27 @@ const stylesheet = `
   padding: 0;
   list-style: none;
 }
+.filters { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.filter {
+  box-sizing: border-box;
+  padding: 0.125rem 0.75rem;
+  border: 1px solid var(--bs-border-color, #dee2e6);
+  border-radius: 999px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  cursor: pointer;
+  transition: color 0.15s ease-in-out, background-color 0.15s ease-in-out,
+    border-color 0.15s ease-in-out;
+}
+.filter[aria-pressed="true"] {
+  border-color: var(--bs-primary, #731fa1);
+  background: var(--bs-primary, #731fa1);
+  color: #fff;
+}
+.filter:focus-visible { outline: 0; box-shadow: 0 0 0 0.25rem rgb(115 31 161 / 0.5); }
 .card { position: relative; aspect-ratio: 488 / 680; }
 .card img, .card .name {
   display: block;
@@ -264,33 +462,21 @@ function identityQuery(deck: Deck): string {
   return query || "c";
 }
 
-/** A Scryfall search for `search`'s cards within the colour identity `identity` (`identityQuery()`). */
-function withinIdentity(search: string, identity: string): string {
-  return `${search} id:${identity}`;
-}
-
-/** The searches for a section's cards and for those its `addSome` button adds (or null if none). */
-function sectionQueries(
-  section: LandSection,
-  identity: string,
-): { cards: string; some: string | null } {
-  const some = section.addSome?.search(identity) ?? null;
-  return {
-    cards: withinIdentity(section.search ?? `otag:${section.tag}`, identity),
-    some: some === null ? null : withinIdentity(some, identity),
-  };
+/** Whether `card` is within the colour identity `identity` (`identityQuery()`), as Scryfall's `id:` finds. */
+function withinIdentity(card: LandCard, identity: string): boolean {
+  return card.colorIdentity.every((color) => identity.includes(color.toLowerCase()));
 }
 
 interface AddMissingButtonProps {
   /** The cards it's for, or null while they're being searched for. */
-  cards: SearchCard[] | null;
+  cards: LandCard[] | null;
   inDeck: ReadonlySet<string>;
   label: string;
   /** Shown instead of `label` once every one of `cards` is in the deck. */
   doneLabel: string;
   /** Whether another add is in progress. */
   saving: boolean;
-  onAdd: (missing: SearchCard[]) => void;
+  onAdd: (missing: LandCard[]) => void;
 }
 
 /**
@@ -345,11 +531,12 @@ export function isLandsGroup(group: string): boolean {
 }
 
 /**
- * A button that opens a modal with a collapsible section per kind of land, by Scryfall oracle tag (collapsed at
- * first): the cards with it within the deck's colour identity, by Scryfall
- * search. On decks the user can edit, each card has a button that adds a copy
+ * A button that opens a modal with a collapsible section per kind of land, by
+ * Scryfall oracle tag (collapsed at first): the cards with it within the
+ * deck's colour identity (`loadLands()`), with Moxfield's images. On decks the user can edit, each card has a button that adds a copy
  * to the mainboard, and each section one that adds those of its cards not in
- * the deck yet, or says they all are. `GroupSummary` renders it at the end of
+ * the deck yet, or says they all are. Toggles at the top hide or show the
+ * sections that list each of `LAND_FILTERS`. `GroupSummary` renders it at the end of
  * the lands group's summary row, so it gets that group as `target`.
  */
 export function LandsTools({ deckId }: InjectionProps) {
@@ -357,8 +544,9 @@ export function LandsTools({ deckId }: InjectionProps) {
   const dialog = useRef<HTMLDialogElement>(null);
   // The searches run once the modal is first opened.
   const [opened, setOpened] = useState(false);
-  // Each search's result, by query, so a deck of other colours starts afresh.
-  const [results, setResults] = useState<Record<string, Loadable<SearchCard[]>>>({});
+  // Every section's cards, of all colours, by section key; idle until the
+  // modal is first opened, and shown as searching until they're loaded.
+  const [lands, setLands] = useState<Loadable<Map<string, LandCard[]>>>({ status: "idle" });
   // While a card (or a section's cards) is being added, every add button waits.
   const [saving, setSaving] = useState(false);
   // The sections expanded, by tag. They start collapsed, and their cards (and
@@ -370,9 +558,27 @@ export function LandsTools({ deckId }: InjectionProps) {
       if (!next.delete(tag)) next.add(tag);
       return next;
     });
+  const identity = deckState.status === "loaded" ? identityQuery(deckState.value) : null;
+  // The sections a deck of its colours could play.
+  const sections = LAND_SECTIONS.filter(
+    (section) => identity === null || colorCount(identity) >= (section.minColors ?? 0),
+  );
+  // The filters turned off, whose sections are hidden: those for the deck's
+  // colour identity (`defaultHidden()`) until the user toggles one, and again
+  // whenever it changes (on another deck).
+  const [filterState, setFilterState] = useState<{
+    identity: string | null;
+    hidden: ReadonlySet<LandFilter>;
+  }>({ identity: null, hidden: defaultHidden(null) });
+  const hidden = filterState.identity === identity ? filterState.hidden : defaultHidden(identity);
+  const toggleFilter = (label: LandFilter) => {
+    const next = new Set(hidden);
+    if (!next.delete(label)) next.add(label);
+    setFilterState({ identity, hidden: next });
+  };
+  const shownSections = sections.filter((section) => isShown(section, hidden));
   // How the last add in each section went.
   const [messages, setMessages] = useState<Record<string, string>>({});
-  const identity = deckState.status === "loaded" ? identityQuery(deckState.value) : null;
   // The names of the cards the deck is played with, to tell which are in it already.
   const inDeck = useMemo(
     () =>
@@ -389,30 +595,22 @@ export function LandsTools({ deckId }: InjectionProps) {
   );
 
   useEffect(() => {
-    if (!opened || identity === null) return;
+    if (!opened) return;
     let current = true;
-    const queries = LAND_SECTIONS.flatMap((section) => {
-      const { cards, some } = sectionQueries(section, identity);
-      return some === null ? [cards] : [cards, some];
-    });
-    for (const query of queries) {
-      const set = (result: Loadable<SearchCard[]>) =>
-        current && setResults((results) => ({ ...results, [query]: result }));
-      searchCards(query).then(
-        (cards) => set({ status: "loaded", value: cards }),
-        (error: unknown) => {
-          console.error("[moxite-refinery]", error);
-          set({ status: "error", error });
-        },
-      );
-    }
+    loadLands().then(
+      (value) => current && setLands({ status: "loaded", value }),
+      (error: unknown) => {
+        console.error("[moxite-refinery]", error);
+        if (current) setLands({ status: "error", error });
+      },
+    );
     return () => {
       current = false;
     };
-  }, [opened, identity]);
+  }, [opened]);
 
   /** Adds a copy of each of `cards` to the mainboard, reporting under `tag`'s section. */
-  async function add(tag: string, cards: SearchCard[]) {
+  async function add(tag: string, cards: LandCard[]) {
     const what = cards.length === 1 ? cards[0].name : `${cards.length} cards`;
     const report = (message: string) =>
       setMessages((messages) => ({ ...messages, [tag]: message }));
@@ -459,23 +657,44 @@ export function LandsTools({ deckId }: InjectionProps) {
           <PackagePlusIcon />
         </button>
       </Tooltip>
-      <Dialog ref={dialog} title="Lands" wide>
+      <Dialog ref={dialog} title="Add Commonly-Used Lands" wide>
         <div style={styles.content}>
+          <div className="filters" role="group" aria-label="Kinds of land shown">
+            {LAND_FILTERS.map((filter) => (
+              <Tooltip
+                key={filter}
+                text={sections
+                  .filter((section) => section.filters?.includes(filter))
+                  .map(sectionTitle)
+                  .join(", ")}
+              >
+                <button
+                  type="button"
+                  className="filter"
+                  aria-pressed={!hidden.has(filter)}
+                  onClick={() => toggleFilter(filter)}
+                >
+                  {filter}
+                </button>
+              </Tooltip>
+            ))}
+          </div>
           {identity === null ? (
             <p style={styles.note}>Loading the deck…</p>
+          ) : shownSections.length === 0 ? (
+            <p style={styles.note}>Every kind of land is filtered out</p>
           ) : (
-            LAND_SECTIONS.map((section) => {
+            shownSections.map((section) => {
               const { tag } = section;
               const title = sectionTitle(section);
-              const queries = sectionQueries(section, identity);
-              const result = results[queries.cards] ?? { status: "loading" };
-              const cards = result.status === "loaded" ? result.value : null;
-              // The cards the `addSome` button adds: none if it has no search.
-              const someResult: Loadable<SearchCard[]> =
-                queries.some === null
-                  ? { status: "loaded", value: [] }
-                  : (results[queries.some] ?? { status: "loading" });
-              const someCards = someResult.status === "loaded" ? someResult.value : null;
+              const cards =
+                lands.status === "loaded"
+                  ? (lands.value.get(tag) ?? []).filter((card) => withinIdentity(card, identity))
+                  : null;
+              // The cards the `addSome` button adds.
+              const { addSome } = section;
+              const someCards =
+                cards && addSome ? cards.filter((card) => addSome.filter(card, identity)) : null;
               const isExpanded = expanded.has(tag);
               return (
                 <section key={tag} aria-label={title} style={styles.section}>
@@ -514,7 +733,7 @@ export function LandsTools({ deckId }: InjectionProps) {
                     )}
                   </div>
                   {messages[tag] && <p style={styles.note}>{messages[tag]}</p>}
-                  {!isExpanded ? null : result.status === "error" ? (
+                  {!isExpanded ? null : lands.status === "error" ? (
                     <p style={styles.note}>Couldn't search Scryfall</p>
                   ) : !cards ? (
                     <p style={styles.note}>Searching…</p>

@@ -1,3 +1,4 @@
+import { cached, DAY_MS } from "./cache";
 import { moxfieldAuthorization } from "./moxfieldPage";
 
 const DECK_PATH = /^\/decks\/([A-Za-z0-9_-]+)\/?$/;
@@ -174,6 +175,77 @@ export function forgetDeck(deckId: string): void {
 /** Replaces the deck `fetchDeck` returns for `deckId`, e.g. with a copy updated after an edit. */
 export function rememberDeck(deckId: string, deck: Deck): void {
   deckRequests.set(deckId, Promise.resolve(deck));
+}
+
+/** A card from Moxfield's card search: Moxfield's printing of it, and its image. */
+export interface MoxfieldSearchCard {
+  /** Moxfield's own card id. */
+  id: string;
+  /** "Front // Back" for multi-face cards. */
+  name: string;
+  set: string;
+  /** Collector number. */
+  cn: string;
+  /** Its (front face's) image on Moxfield's CDN, as on the deck page. */
+  image: string;
+}
+
+interface MoxfieldSearchPage {
+  data: {
+    id: string;
+    name: string;
+    set: string;
+    cn: string;
+    layout: string;
+    image_seq?: number;
+    card_faces?: { id: string; image_seq?: number }[];
+  }[];
+  hasMore: boolean;
+}
+
+// The layouts whose faces are on separate sides of the card, so each face has
+// its own image, under the face's id.
+const DOUBLE_SIDED_LAYOUTS = new Set([
+  "modal_dfc",
+  "transform",
+  "reversible_card",
+  "double_faced_token",
+  "art_series",
+]);
+
+/**
+ * Every card matching a search `query` on Moxfield's card search (Scryfall's
+ * syntax, one printing of each card, as its add-card search picks), across all
+ * of its pages. It needs no sign-in. Results are cached by query for a day
+ * (`cached()`), in every tab.
+ */
+export function searchMoxfieldCards(query: string): Promise<MoxfieldSearchCard[]> {
+  return cached(`moxfield-search:${query}`, DAY_MS, async () => {
+    const cards: MoxfieldSearchCard[] = [];
+    for (let page = 1, hasMore = true; hasMore; page++) {
+      const params = new URLSearchParams({ q: query, page: String(page) });
+      const res = await fetch(`${MOXFIELD_API}/v2/cards/search?${params}`);
+      // A search with no results may be a 404, as on Scryfall.
+      if (res.status === 404) break;
+      if (!res.ok) throw new Error(`Moxfield search ${query}: HTTP ${res.status}`);
+      const result = (await res.json()) as MoxfieldSearchPage;
+      for (const card of result.data) {
+        const face = DOUBLE_SIDED_LAYOUTS.has(card.layout) ? card.card_faces?.[0] : undefined;
+        const [imageId, seq] = face
+          ? [`face-${face.id}`, face.image_seq]
+          : [card.id, card.image_seq];
+        cards.push({
+          id: card.id,
+          name: card.name,
+          set: card.set,
+          cn: card.cn,
+          image: `https://assets.moxfield.net/cards/card-${imageId}-normal.webp${seq ? `?${seq}` : ""}`,
+        });
+      }
+      hasMore = result.hasMore && result.data.length > 0;
+    }
+    return cards;
+  });
 }
 
 /** A card tag's name, compared without case, extra spacing, or hyphens for spaces. */

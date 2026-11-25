@@ -2,8 +2,10 @@
 // Firefox (MV3, where `chrome.*` calls return promises) both provide to
 // content scripts.
 interface StorageArea {
-  get(key: string): Promise<Record<string, unknown>>;
+  /** The items under `key`, or every item for null. */
+  get(key: string | null): Promise<Record<string, unknown>>;
   set(items: Record<string, unknown>): Promise<void>;
+  remove(keys: string[]): Promise<void>;
 }
 
 interface StorageChange {
@@ -29,6 +31,15 @@ export async function readStorage(key: string): Promise<unknown> {
 
 export function writeStorage(key: string, value: unknown): Promise<void> {
   return chrome.storage.local.set({ [key]: value });
+}
+
+/** Everything in extension storage, by key. */
+export function readAllStorage(): Promise<Record<string, unknown>> {
+  return chrome.storage.local.get(null);
+}
+
+export function removeStorage(keys: string[]): Promise<void> {
+  return chrome.storage.local.remove(keys);
 }
 
 /** Calls `callback` with `key`'s new value whenever it changes, from any tab. */

@@ -76,28 +76,57 @@ test("the lands button ends the lands group's summary row and opens a modal", as
   );
 
   await lands.getByRole("button", { name: "Lands", exact: true }).click();
-  const dialog = page.getByRole("dialog", { name: "Lands" });
+  const dialog = page.getByRole("dialog", { name: "Add Commonly-Used Lands" });
   await expect(dialog).toBeVisible();
-  // A section per land cycle tag, each with the cards Scryfall finds for it.
-  const painlands = dialog.getByRole("region", { name: "Pain Land" });
-  await expect(painlands.getByRole("heading")).toHaveText(/^Pain Land\s*\(\d+\)$/, {
+  // A section per kind of land, each with the cards Scryfall finds for its tags.
+  const rainbowLands = dialog.getByRole("region", { name: "Rainbow Land" });
+  await expect(rainbowLands.getByRole("heading")).toHaveText(/^Rainbow Land\s*\(\d+\)$/, {
     timeout: 15_000,
   });
   // Collapsed at first, so none of its cards (or their images) are there yet.
-  await expect(painlands.locator("li")).toHaveCount(0);
-  const toggle = painlands.getByRole("button", { name: /^Pain Land/ });
+  await expect(rainbowLands.locator("li")).toHaveCount(0);
+  const toggle = rainbowLands.getByRole("button", { name: /^Rainbow Land/ });
   await expect(toggle).toHaveAttribute("aria-expanded", "false");
   await toggle.click();
   await expect(toggle).toHaveAttribute("aria-expanded", "true");
-  await expect(painlands.locator("li img").first()).toBeVisible();
+  await expect(rainbowLands.locator("li img").first()).toBeVisible();
+  // Moxfield's own images, as on the deck page.
+  await expect(rainbowLands.locator("li img").first()).toHaveAttribute(
+    "src",
+    /^https:\/\/assets\.moxfield\.net\/cards\/card-[A-Za-z0-9]+-normal\.webp/,
+  );
   // Five cards to a row.
-  const tops = await painlands
+  const tops = await rainbowLands
     .locator("li")
     .evaluateAll((cards) => cards.slice(0, 6).map((card) => card.getBoundingClientRect().top));
   expect(new Set(tops.slice(0, 5)).size).toBe(1);
   expect(tops[5]).toBeGreaterThan(tops[0]);
   // Not signed in, so the deck isn't editable and there's nothing to add with.
   await expect(dialog.getByRole("button", { name: /^Add/ })).toHaveCount(0);
+  // Toggles at the top, all on at first, hide the sections they match.
+  const filters = dialog.getByRole("group", { name: "Kinds of land shown" });
+  for (const label of [
+    "MDFC",
+    "Dual",
+    "Mono",
+    "Tapped",
+    "Conditional Tapped",
+    "Utility",
+    "Searchable",
+  ]) {
+    await expect(filters.getByRole("button", { name: label, exact: true })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  }
+  const searchable = filters.getByRole("button", { name: "Searchable", exact: true });
+  await searchable.click();
+  await expect(searchable).toHaveAttribute("aria-pressed", "false");
+  await expect(dialog.getByRole("region", { name: "Shock Land" })).toHaveCount(0);
+  await expect(dialog.getByRole("region", { name: "Snow Tapland" })).toHaveCount(0);
+  await expect(rainbowLands).toBeVisible();
+  await searchable.click();
+  await expect(dialog.getByRole("region", { name: "Shock Land" })).toBeVisible();
   await page.keyboard.press("Escape");
   await expect(dialog).toBeHidden();
 });

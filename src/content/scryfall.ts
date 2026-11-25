@@ -1,3 +1,5 @@
+import { cached, DAY_MS } from "./cache";
+
 // Scryfall's API and bulk files allow cross-origin requests. Its guidelines ask
 // for an Accept header and to keep within its rate limits (below).
 const API = "https://api.scryfall.com";
@@ -90,27 +92,49 @@ export interface SearchCard {
   set: string;
   /** Collector number. */
   cn: string;
+  /** Scryfall's `layout`, e.g. "normal" or "modal_dfc". */
+  layout: string;
+  /** Its colour identity, as upper-case letters ("W", "U", …). */
+  colorIdentity: string[];
+  /** Its rules text, its faces' joined by newlines for multi-face cards. */
+  oracleText: string;
+  /** The oracle ids Tagger's oracle tags attach to (its faces' if it has none itself). */
+  oracleIds: string[];
   /** The card's (front face's) image, 488 × 680. */
   image: string | null;
 }
 
+interface SearchFace extends ScryfallFace {
+  oracle_text?: string;
+  image_uris?: { normal?: string };
+}
+
+interface SearchResult extends SearchFace {
+  id: string;
+  name: string;
+  set: string;
+  collector_number: string;
+  layout: string;
+  color_identity: string[];
+  card_faces?: SearchFace[];
+}
+
 interface SearchPage {
-  data: (ScryfallCard & {
-    name: string;
-    set: string;
-    collector_number: string;
-    image_uris?: { normal?: string };
-    card_faces?: (ScryfallFace & { image_uris?: { normal?: string } })[];
-  })[];
+  data: SearchResult[];
   has_more: boolean;
   next_page?: string;
 }
 
 /**
  * Every card matching a Scryfall search `query` (one printing of each, as
- * Scryfall picks by default), by name, across all of its pages.
+ * Scryfall picks by default), by name, across all of its pages. Results are
+ * cached by query for a day (`cached()`), in every tab.
  */
-export async function searchCards(query: string): Promise<SearchCard[]> {
+export function searchCards(query: string): Promise<SearchCard[]> {
+  return cached(`scryfall-search:${query}`, DAY_MS, () => fetchSearch(query));
+}
+
+async function fetchSearch(query: string): Promise<SearchCard[]> {
   const cards: SearchCard[] = [];
   let url: string | undefined = `/cards/search?${new URLSearchParams({ q: query, order: "name" })}`;
   while (url) {
@@ -125,6 +149,12 @@ export async function searchCards(query: string): Promise<SearchCard[]> {
         name: card.name,
         set: card.set,
         cn: card.collector_number,
+        layout: card.layout,
+        colorIdentity: card.color_identity,
+        oracleText:
+          card.oracle_text ??
+          (card.card_faces ?? []).map((face) => face.oracle_text ?? "").join("\n"),
+        oracleIds: faceIds(card, "oracle_id"),
         image: card.image_uris?.normal ?? card.card_faces?.[0]?.image_uris?.normal ?? null,
       });
     }
